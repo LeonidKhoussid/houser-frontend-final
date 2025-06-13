@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer components {
+  .btn-primary {
+    @apply bg-orange-400 text-black font-semibold px-6 py-2 rounded-full hover:bg-orange-500 transition;
+  }
+
+  .btn-secondary {
+    @apply bg-teal-800 text-white font-bold px-6 py-2 rounded-lg hover:bg-teal-900 transition;
+  }
+
+  .input-field {
+    @apply w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400;
+  }
+
+  .chat-bubble-left {
+    @apply bg-teal-700 text-white rounded-xl p-3 max-w-xs;
+  }
+
+  .chat-bubble-right {
+    @apply bg-orange-300 text-black rounded-xl p-3 max-w-xs;
+  }
+
+  .message-row {
+    @apply flex gap-2 items-start;
+  }
+
+  .message-list {
+    @apply flex flex-col gap-3 p-4 overflow-y-auto;
+  }
+
+  .chat-sidebar {
+    @apply bg-teal-900 text-white w-72 p-4 h-full flex flex-col;
+  }
+
+  .chat-sidebar-item {
+    @apply flex items-center justify-between p-3 rounded hover:bg-teal-700 cursor-pointer;
+  }
+
+  .profile-card {
+    @apply bg-white shadow-md p-6 rounded-lg border w-full max-w-2xl;
+  }
+
+  .property-card {
+    @apply bg-white shadow p-4 rounded-lg flex flex-col gap-2;
+  }
+
+  .filter-box {
+    @apply bg-orange-400 text-black p-3 rounded w-full text-center font-semibold;
+  }
+
+  .filter-sidebar {
+    @apply bg-white p-4 rounded-lg shadow flex flex-col gap-3;
+  }
+
+  .form-section {
+    @apply max-w-lg w-full flex flex-col gap-4;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold mb-2;
+  }
+
+  .tag {
+    @apply bg-orange-400 text-white px-3 py-1 rounded-full text-sm font-medium;
+  }
+}

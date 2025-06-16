@@ -413,17 +413,10 @@ export default function PropertyDashboard() {
 
           {/* Chat Icon */}
           <div
-            className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center border-2 border-orange-600 relative cursor-pointer"
+            className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center  relative cursor-pointer"
             onClick={() => (window.location.href = "/chat")}
             title="View Chats">
             <MessageCircle className="w-6 h-6 text-white" />
-            {matches > 0 && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                <span className="text-xs text-orange-400 font-bold">
-                  {matches}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Filter Icon */}
@@ -522,17 +515,10 @@ export default function PropertyDashboard() {
 
         {/* Chat Icon */}
         <div
-          className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center border-2 border-orange-600 relative cursor-pointer"
+          className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center relative cursor-pointer"
           onClick={() => (window.location.href = "/chat")}
           title="View Chats">
           <MessageCircle className="w-6 h-6 text-white" />
-          {matches > 0 && (
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center">
-              <span className="text-xs text-orange-400 font-bold">
-                {matches}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Filter Icon */}

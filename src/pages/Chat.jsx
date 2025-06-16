@@ -10,7 +10,13 @@ import {
   Loader2,
   MessageCircle,
 } from "lucide-react";
-import { subscribeToConversation, unsubscribeFromConversation } from "../echo";
+import {
+  echo,
+  subscribeToConversation,
+  unsubscribeFromConversation,
+  subscribeToUserChannel,
+  unsubscribeFromUserChannel,
+} from "../echo";
 
 export default function Chat() {
   const [matches, setMatches] = useState([]);
@@ -19,13 +25,43 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({}); // Track unread counts per conversation
+  const [processedMessages, setProcessedMessages] = useState(new Set()); // Track processed message IDs
   const messagesEndRef = useRef(null);
   const currentChannelRef = useRef(null);
 
   const authToken = localStorage.getItem("auth_token");
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
 
-  console.log("🚀 Chat component loaded");
+  // TEMPORARY DEBUG TEST - Add this right after the currentUser declaration
+  useEffect(() => {
+    if (!currentUser.id) return;
+
+    console.log("🔧 Setting up debug user channel for user:", currentUser.id);
+
+    // Simple direct subscription to test
+    const testChannel = echo.private(`user.${currentUser.id}`);
+
+    testChannel.listen("MessageSent", (data) => {
+      console.log("🎯 DIRECT MessageSent received on user channel:", data);
+      alert("Message received on user channel! Check console for details.");
+    });
+
+    testChannel.listen(".MessageSent", (data) => {
+      console.log("🎯 DIRECT .MessageSent received on user channel:", data);
+      alert(
+        "Message received on user channel (with dot)! Check console for details."
+      );
+    });
+
+    // Test if channel subscription works
+    console.log("🔧 User channel subscribed:", testChannel);
+
+    return () => {
+      echo.leave(`user.${currentUser.id}`);
+      console.log("🔧 Left user channel");
+    };
+  }, [currentUser.id]);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -64,12 +100,28 @@ export default function Chat() {
     return await response.json();
   };
 
-  // Fetch matches
+  // Fetch matches with sorting by most recent message
   const fetchMatches = async () => {
     try {
       setLoading(true);
       const data = await apiCall("/matches");
-      setMatches(data);
+
+      // Sort matches by most recent message (last_message_at)
+      const sortedMatches = data.sort((a, b) => {
+        const aTime = new Date(a.last_message_at || a.created_at || 0);
+        const bTime = new Date(b.last_message_at || b.created_at || 0);
+        return bTime - aTime; // Most recent first
+      });
+
+      // Initialize unread counts from the backend data
+      const initialUnreadCounts = {};
+      sortedMatches.forEach((match) => {
+        // Assuming your backend returns unread_count for each match
+        initialUnreadCounts[match.conversation_id] = match.unread_count || 0;
+      });
+      setUnreadCounts(initialUnreadCounts);
+
+      setMatches(sortedMatches);
     } catch (error) {
       console.error("Failed to fetch matches:", error);
     } finally {
@@ -92,11 +144,6 @@ export default function Chat() {
     if (!newMessage.trim() || !selectedMatch || sending) return;
 
     const messageContent = newMessage.trim();
-    console.log(
-      "📤 Sending message to conversation:",
-      selectedMatch.conversation_id
-    );
-
     setSending(true);
 
     try {
@@ -108,8 +155,6 @@ export default function Chat() {
         }),
       });
 
-      console.log("📤 Message sent successfully:", actualMessage);
-
       // Add the message immediately to local state
       setMessages((prev) => {
         const messageExists = prev.some((m) => m.id === actualMessage.id);
@@ -119,47 +164,178 @@ export default function Chat() {
 
       setNewMessage("");
     } catch (error) {
-      console.error("❌ Failed to send message:", error);
+      console.error("Failed to send message:", error);
     } finally {
       setSending(false);
     }
   };
 
-  // FIXED: Better channel management for real-time messages
+  // Global message listener for unread counts (messages from conversations not currently open)
+  useEffect(() => {
+    if (!currentUser.id) return;
+
+    const handleGlobalMessage = (data) => {
+      const { message } = data;
+
+      // Debug log to see if messages are received
+      console.log(
+        "🔔 Received message on user channel:",
+        message.id,
+        "from user:",
+        message.sender_id
+      );
+
+      // Only process messages from other users
+      if (message.sender_id === currentUser.id) return;
+
+      // Prevent duplicate processing of the same message
+      if (processedMessages.has(message.id)) {
+        console.log("⚠️ Message already processed:", message.id);
+        return;
+      }
+
+      const messageConversationId = message.conversation_id;
+      const currentlySelectedConversationId = selectedMatch?.conversation_id;
+
+      console.log("📊 Checking unread count:", {
+        messageConversationId,
+        currentlySelectedConversationId,
+        shouldIncrement:
+          messageConversationId !== currentlySelectedConversationId,
+      });
+
+      // If the message is NOT from the currently selected conversation, increment unread count
+      if (messageConversationId !== currentlySelectedConversationId) {
+        setUnreadCounts((prev) => {
+          const currentCount = prev[messageConversationId] || 0;
+          const newCount = currentCount + 1;
+          console.log(
+            "✅ Incrementing unread count for conversation",
+            messageConversationId,
+            "from",
+            currentCount,
+            "to",
+            newCount
+          );
+          return {
+            ...prev,
+            [messageConversationId]: newCount,
+          };
+        });
+
+        // Mark this message as processed
+        setProcessedMessages((prev) => new Set([...prev, message.id]));
+      } else {
+        console.log(
+          "ℹ️ Not incrementing - message is from currently selected conversation"
+        );
+      }
+
+      // Update the conversation's last_message_at in the matches list
+      setMatches((prevMatches) => {
+        const updatedMatches = prevMatches.map((match) => {
+          if (match.conversation_id === messageConversationId) {
+            return {
+              ...match,
+              last_message_at: message.created_at,
+            };
+          }
+          return match;
+        });
+
+        // Re-sort by most recent message
+        return updatedMatches.sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.created_at || 0);
+          const bTime = new Date(b.last_message_at || b.created_at || 0);
+          return bTime - aTime;
+        });
+      });
+    };
+
+    // Use a single global listener to avoid duplicates
+    const userChannel = subscribeToUserChannel(
+      currentUser.id,
+      handleGlobalMessage
+    );
+
+    return () => {
+      if (userChannel) {
+        userChannel.stopListening(".MessageSent");
+        userChannel.stopListening("MessageSent");
+      }
+    };
+  }, [selectedMatch?.conversation_id, currentUser.id, processedMessages]);
+  // Real-time message handling for current conversation
   useEffect(() => {
     if (!selectedMatch?.conversation_id) {
-      // Unsubscribe when no conversation selected
       unsubscribeFromConversation();
       return;
     }
 
     const conversationId = selectedMatch.conversation_id;
-    console.log("🔔 Setting up real-time for conversation:", conversationId);
+
+    // Clear unread count when opening a conversation
+    setUnreadCounts((prev) => ({
+      ...prev,
+      [conversationId]: 0,
+    }));
 
     const handleMessage = (data) => {
-      console.log("📨 Real-time message received:", data);
-
       const { message } = data;
 
-      // Only add messages from other users
+      // Only add messages from other users to the current conversation
       if (message.sender_id !== currentUser.id) {
-        console.log("✅ Adding message from other user");
-
         setMessages((prevMessages) => {
           // Check if message already exists
           const messageExists = prevMessages.some((m) => m.id === message.id);
           if (messageExists) {
-            console.log("⚠️ Message already exists, skipping");
             return prevMessages;
           }
 
-          console.log("📝 Adding new message to state");
           const newMessages = [...prevMessages, message];
           setTimeout(() => scrollToBottom(), 100);
           return newMessages;
         });
+
+        // Update the conversation's last_message_at in the matches list
+        setMatches((prevMatches) => {
+          const updatedMatches = prevMatches.map((match) => {
+            if (match.conversation_id === conversationId) {
+              return {
+                ...match,
+                last_message_at: message.created_at,
+              };
+            }
+            return match;
+          });
+
+          // Re-sort by most recent message
+          return updatedMatches.sort((a, b) => {
+            const aTime = new Date(a.last_message_at || a.created_at || 0);
+            const bTime = new Date(b.last_message_at || b.created_at || 0);
+            return bTime - aTime;
+          });
+        });
       } else {
-        console.log("ℹ️ Ignoring own message");
+        // For sent messages, also update the matches list timestamp
+        setMatches((prevMatches) => {
+          const updatedMatches = prevMatches.map((match) => {
+            if (match.conversation_id === conversationId) {
+              return {
+                ...match,
+                last_message_at: message.created_at,
+              };
+            }
+            return match;
+          });
+
+          // Re-sort by most recent message
+          return updatedMatches.sort((a, b) => {
+            const aTime = new Date(a.last_message_at || a.created_at || 0);
+            const bTime = new Date(b.last_message_at || b.created_at || 0);
+            return bTime - aTime;
+          });
+        });
       }
     };
 
@@ -168,23 +344,138 @@ export default function Chat() {
     currentChannelRef.current = channel;
 
     return () => {
-      console.log("🧹 Cleaning up conversation subscription");
       unsubscribeFromConversation();
       currentChannelRef.current = null;
     };
   }, [selectedMatch?.conversation_id, currentUser.id]);
 
+  // Listen for new conversations (when someone starts a new chat)
+  useEffect(() => {
+    if (!currentUser.id) return;
+
+    const handleNewConversation = (data) => {
+      const newConversation = data.conversation;
+
+      // Add the new conversation to the matches list
+      setMatches((prevMatches) => {
+        // Check if conversation already exists
+        const exists = prevMatches.some(
+          (match) => match.conversation_id === newConversation.conversation_id
+        );
+        if (exists) return prevMatches;
+
+        // Add new conversation to the top and re-sort by most recent
+        const updatedMatches = [newConversation, ...prevMatches];
+        return updatedMatches.sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.created_at || 0);
+          const bTime = new Date(b.last_message_at || b.created_at || 0);
+          return bTime - aTime;
+        });
+      });
+
+      // Initialize unread count for new conversation
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [newConversation.conversation_id]: 1, // New conversation has 1 unread message
+      }));
+    };
+
+    const handleGlobalMessage = (data) => {
+      const { message } = data;
+
+      // Only process messages from other users
+      if (message.sender_id === currentUser.id) return;
+
+      // Prevent duplicate processing of the same message
+      if (processedMessages.has(message.id)) {
+        return;
+      }
+
+      const messageConversationId = message.conversation_id;
+      const currentlySelectedConversationId = selectedMatch?.conversation_id;
+
+      // If the message is NOT from the currently selected conversation, increment unread count
+      if (messageConversationId !== currentlySelectedConversationId) {
+        setUnreadCounts((prev) => {
+          const currentCount = prev[messageConversationId] || 0;
+          return {
+            ...prev,
+            [messageConversationId]: currentCount + 1,
+          };
+        });
+
+        // Mark this message as processed
+        setProcessedMessages((prev) => new Set([...prev, message.id]));
+      }
+
+      // Update the conversation's last_message_at in the matches list
+      setMatches((prevMatches) => {
+        const updatedMatches = prevMatches.map((match) => {
+          if (match.conversation_id === messageConversationId) {
+            return {
+              ...match,
+              last_message_at: message.created_at,
+            };
+          }
+          return match;
+        });
+
+        // Re-sort by most recent message
+        return updatedMatches.sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.created_at || 0);
+          const bTime = new Date(b.last_message_at || b.created_at || 0);
+          return bTime - aTime;
+        });
+      });
+    };
+
+    // Subscribe to user channel with both handlers
+    const userChannel = subscribeToUserChannel(
+      currentUser.id,
+      handleNewConversation,
+      handleGlobalMessage
+    );
+
+    return () => {
+      unsubscribeFromUserChannel();
+    };
+  }, [selectedMatch?.conversation_id, currentUser.id, processedMessages]);
+
   // Select a match and load messages
   const selectMatch = (match) => {
-    console.log("🎯 Selecting match:", match);
+    // Prevent clicking on test conversations
+    if (match.conversation_id >= 99999) {
+      alert(
+        "This is a test conversation! Click on real conversations instead."
+      );
+      return;
+    }
+
     setSelectedMatch(match);
     fetchMessages(match.conversation_id);
+  };
+
+  // Fetch unread counts on component mount
+  const fetchUnreadCounts = async () => {
+    try {
+      const data = await apiCall("/unread-counts");
+      // Ensure data is an object, not an array
+      if (typeof data === "object" && data !== null) {
+        setUnreadCounts(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch unread counts:", error);
+      // Don't break the app if unread counts fail
+      setUnreadCounts({});
+    }
   };
 
   // Initial load
   useEffect(() => {
     if (authToken) {
       fetchMatches();
+      // Start with empty unread counts - they'll be updated in real-time
+      setUnreadCounts({});
     }
   }, []);
 
@@ -229,7 +520,8 @@ export default function Chat() {
                 const property = match.property;
                 const isSelected =
                   selectedMatch?.conversation_id === match.conversation_id;
-                const unreadCount = property.messages_count || 0;
+                const unreadCount = unreadCounts[match.conversation_id] || 0;
+                const isTestConversation = match.conversation_id >= 99999;
 
                 return (
                   <div
@@ -238,10 +530,17 @@ export default function Chat() {
                     className={`p-4 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${
                       isSelected
                         ? "bg-gradient-to-r from-orange-100 to-orange-50 border-l-4 border-orange-400 shadow-sm"
+                        : isTestConversation
+                        ? "bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200 opacity-75"
                         : "hover:bg-gray-50 border border-transparent"
                     }`}>
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                          isTestConversation
+                            ? "bg-gradient-to-br from-blue-400 to-blue-500"
+                            : "bg-gradient-to-br from-orange-400 to-orange-500"
+                        }`}>
                         <User className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -249,6 +548,11 @@ export default function Chat() {
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-800 truncate text-base">
                               {otherUser.name}
+                              {isTestConversation && (
+                                <span className="text-xs text-blue-600 ml-2">
+                                  (TEST)
+                                </span>
+                              )}
                             </h3>
                             <p className="text-sm text-gray-600 truncate font-medium">
                               {property.title}
@@ -270,6 +574,11 @@ export default function Chat() {
                             /mo
                           </span>
                         </div>
+                        {isTestConversation && (
+                          <p className="text-xs text-blue-600 mt-1 italic">
+                            Test conversation - don't click!
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

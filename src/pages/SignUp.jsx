@@ -15,13 +15,18 @@ export default function HouserSignup() {
     phoneNumber: "",
     password: "",
     confirmPassword: "",
+    city: "",
+    state: "",
   });
   const [homeData, setHomeData] = useState({
     images: [],
+    title: "",
     description: "",
     tags: [],
-    type: "RENT",
+    type: "rent",
     price: "",
+    city: "",
+    state: "",
   });
   const [currentTag, setCurrentTag] = useState("");
 
@@ -43,6 +48,7 @@ export default function HouserSignup() {
     if (!formData.lastName.trim()) return "Last name is required";
     if (!formData.email.trim()) return "Email is required";
     if (!formData.phoneNumber.trim()) return "Phone number is required";
+    if (!formData.city.trim()) return "City is required";
     if (!formData.password) return "Password is required";
     if (formData.password !== formData.confirmPassword)
       return "Passwords do not match";
@@ -75,21 +81,33 @@ export default function HouserSignup() {
           password: formData.password,
           password_confirmation: formData.confirmPassword,
           user_type: userType.toLowerCase(),
+          city: formData.city,
+          state: formData.state,
         }),
       });
 
-      console.log("Response status:", response.status);
-
-      // Read the response only once
       const data = await response.json();
-      console.log("Response data:", data);
 
       if (response.ok) {
         setSuccess("Registration successful! Welcome to Houser!");
-        console.log("Registration successful:", data);
-        // You might want to redirect here or show a success message
+
+        // Store auth token and user data
+        localStorage.setItem("auth_token", data.access_token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("user_city", formData.city);
+
+        // If seller with properties, save them
+        if (userType === "seller" && homes.length > 0) {
+          for (const home of homes) {
+            await savePropertyToAPI(home, data.access_token);
+          }
+        }
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 2000);
       } else {
-        // Handle Laravel validation errors
         if (data.errors) {
           const errorMessages = Object.values(data.errors).flat();
           setError(errorMessages.join(", "));
@@ -102,6 +120,31 @@ export default function HouserSignup() {
       setError("Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const savePropertyToAPI = async (property, token) => {
+    try {
+      await fetch("/api/properties", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: property.title,
+          description: property.description,
+          price: property.price,
+          type: property.type,
+          city: property.city,
+          state: property.state,
+          tags: property.tags,
+          image: property.images[0] || "default.jpg",
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to save property:", error);
     }
   };
 
@@ -147,20 +190,39 @@ export default function HouserSignup() {
   };
 
   const handleSaveHome = () => {
-    if (homeData.description && homeData.price) {
+    if (
+      homeData.title &&
+      homeData.description &&
+      homeData.price &&
+      homeData.city
+    ) {
       setHomes([...homes, { ...homeData, id: Date.now() }]);
+      // Reset form but keep user's city as default
       setHomeData({
         images: [],
+        title: "",
         description: "",
         tags: [],
-        type: "RENT",
+        type: "rent",
         price: "",
+        city: formData.city || "",
+        state: formData.state || "",
       });
       setShowHomeModal(false);
+    } else {
+      alert(
+        "Please fill in all required fields: Title, Description, Price, and City"
+      );
     }
   };
 
   const openHomeModal = () => {
+    // Pre-fill city from user registration
+    setHomeData({
+      ...homeData,
+      city: formData.city || "",
+      state: formData.state || "",
+    });
     setShowHomeModal(true);
   };
 
@@ -245,6 +307,32 @@ export default function HouserSignup() {
           </div>
 
           <div className="flex items-center">
+            <label className="w-48 text-xl text-black">City:</label>
+            <input
+              type="text"
+              name="city"
+              value={formData.city}
+              onChange={handleInputChange}
+              className="flex-1 h-12 border-2 border-gray-300 rounded-md px-4 focus:border-blue-500 focus:outline-none"
+              placeholder="San Francisco"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex items-center">
+            <label className="w-48 text-xl text-black">State:</label>
+            <input
+              type="text"
+              name="state"
+              value={formData.state}
+              onChange={handleInputChange}
+              className="flex-1 h-12 border-2 border-gray-300 rounded-md px-4 focus:border-blue-500 focus:outline-none"
+              placeholder="CA"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex items-center">
             <label className="w-48 text-xl text-black">Password:</label>
             <input
               type="password"
@@ -301,7 +389,7 @@ export default function HouserSignup() {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-black">
-                Add your first home
+                Add your properties
               </h3>
               <button
                 onClick={openHomeModal}
@@ -330,9 +418,15 @@ export default function HouserSignup() {
                     )}
                   </div>
                   <div className="flex-1">
+                    <h4 className="text-lg font-semibold mb-2">{home.title}</h4>
                     <p className="text-gray-700 leading-relaxed mb-3">
                       {home.description}
                     </p>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                      <span className="font-semibold">Location:</span>
+                      {home.city}
+                      {home.state && `, ${home.state}`}
+                    </div>
                     <div className="flex flex-wrap gap-2 mb-3">
                       {home.tags.map((tag, index) => (
                         <span
@@ -345,11 +439,11 @@ export default function HouserSignup() {
                     <div className="flex items-center gap-4">
                       <span
                         className={`px-4 py-1 rounded-full text-sm font-semibold ${
-                          home.type === "RENT"
+                          home.type === "rent"
                             ? "bg-orange-500 text-white"
                             : "bg-orange-500 text-white"
                         }`}>
-                        {home.type}
+                        {home.type.toUpperCase()}
                       </span>
                       <span className="text-lg font-bold">${home.price}</span>
                     </div>
@@ -358,34 +452,9 @@ export default function HouserSignup() {
               ))}
 
               {homes.length === 0 && (
-                <div className="flex gap-6">
-                  <div className="w-80 h-48 bg-gray-200 rounded-lg overflow-hidden">
-                    <img
-                      src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2075&q=80"
-                      alt="Modern house exterior"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-700 leading-relaxed">
-                      House is located in a relatively good spot, close to a
-                      lake for fishing, good weather in the city year round.
-                      Lots of shopping malls nearby.
-                    </p>
-                    <p className="text-gray-700 leading-relaxed mt-3">
-                      Inside, the house is cozy and bright, with large windows
-                      that let in plenty of natural sunlight. The kitchen has a
-                      spacious dining table, perfect for family meals, while the
-                      living room features a soft, comfy couch—ideal for
-                      relaxing in the evenings.
-                    </p>
-                    <p className="text-gray-700 leading-relaxed mt-3">
-                      Outside, there's a lovely garden with fruit trees and a
-                      barbecue area, just right for summer gatherings. The
-                      neighborhood is quiet and peaceful, so you can enjoy your
-                      time without any disturbances.
-                    </p>
-                  </div>
+                <div className="text-center py-8 text-gray-500">
+                  No properties added yet. Click the + button to add your first
+                  property.
                 </div>
               )}
             </div>
@@ -411,7 +480,7 @@ export default function HouserSignup() {
               <div className="p-6">
                 {/* Modal Header */}
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold">Add New Home</h2>
+                  <h2 className="text-2xl font-bold">Add New Property</h2>
                   <button
                     onClick={() => setShowHomeModal(false)}
                     className="text-gray-500 hover:text-gray-700">
@@ -452,6 +521,21 @@ export default function HouserSignup() {
                   </div>
                 </div>
 
+                {/* Title */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-2">
+                    Property Title:
+                  </h3>
+                  <input
+                    type="text"
+                    name="title"
+                    value={homeData.title}
+                    onChange={handleHomeDataChange}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-orange-500 focus:outline-none"
+                    placeholder="Modern 2BR Apartment"
+                  />
+                </div>
+
                 {/* Description */}
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold mb-2">
@@ -466,6 +550,33 @@ export default function HouserSignup() {
                   />
                   <div className="text-right text-sm text-gray-500 mt-1">
                     {homeData.description.length}/500
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div className="mb-6 grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">City:</h3>
+                    <input
+                      type="text"
+                      name="city"
+                      value={homeData.city}
+                      onChange={handleHomeDataChange}
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-orange-500 focus:outline-none"
+                      placeholder="San Francisco"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">State:</h3>
+                    <input
+                      type="text"
+                      name="state"
+                      value={homeData.state}
+                      onChange={handleHomeDataChange}
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-orange-500 focus:outline-none"
+                      placeholder="CA"
+                    />
                   </div>
                 </div>
 
@@ -492,7 +603,7 @@ export default function HouserSignup() {
                     onChange={(e) => setCurrentTag(e.target.value)}
                     onKeyDown={handleAddTag}
                     className="border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-orange-500 focus:outline-none"
-                    placeholder="Add tag and press Enter"
+                    placeholder="Add tag and press Enter (e.g., pool, garage, pet-friendly)"
                   />
                 </div>
 
@@ -501,18 +612,18 @@ export default function HouserSignup() {
                   <h3 className="text-lg font-semibold mb-2">Type:</h3>
                   <div className="flex gap-4">
                     <button
-                      onClick={() => setHomeData({ ...homeData, type: "RENT" })}
+                      onClick={() => setHomeData({ ...homeData, type: "rent" })}
                       className={`px-6 py-2 rounded-full font-semibold ${
-                        homeData.type === "RENT"
+                        homeData.type === "rent"
                           ? "bg-orange-500 text-white"
                           : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                       }`}>
                       RENT
                     </button>
                     <button
-                      onClick={() => setHomeData({ ...homeData, type: "SELL" })}
+                      onClick={() => setHomeData({ ...homeData, type: "sell" })}
                       className={`px-6 py-2 rounded-full font-semibold ${
-                        homeData.type === "SELL"
+                        homeData.type === "sell"
                           ? "bg-orange-500 text-white"
                           : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                       }`}>
@@ -523,7 +634,9 @@ export default function HouserSignup() {
 
                 {/* Price */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-2">Price:</h3>
+                  <h3 className="text-lg font-semibold mb-2">
+                    Price {homeData.type === "rent" ? "(per month)" : ""}:
+                  </h3>
                   <input
                     type="number"
                     name="price"

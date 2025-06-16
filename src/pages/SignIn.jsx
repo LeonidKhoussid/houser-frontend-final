@@ -41,7 +41,9 @@ export default function SignIn() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       // Redirect to dashboard or home page
-      window.location.href = "/dashboard";
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 100);
     } catch (err) {
       setError(err.message || "An error occurred during login");
     } finally {

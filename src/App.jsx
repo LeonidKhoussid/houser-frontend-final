@@ -7,6 +7,8 @@ import Messages from "./pages/Messages";
 import AddHome from "./pages/AddHome";
 import CompanyDashboard from "./pages/CompanyDashboard";
 import Dashboard from "./pages/Dashboard";
+import Chat from "./pages/Chat";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
         <Route path="/add-home" element={<AddHome />} />
         <Route path="/company" element={<CompanyDashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </Router>
   );

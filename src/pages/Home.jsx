@@ -128,7 +128,24 @@ export default function HouserLandingPage() {
               HOW IT WORKS
             </h2>
             <p className="text-gray-600 text-sm leading-relaxed">
-              {/* Insert "How It Works" description text here */}
+              Picture this: you're scrolling effortlessly through stunning
+              properties, swiping right on the ones that make your heart race
+              and left on the ones that don't quite fit your vision—welcome
+              to Houser, the revolutionary app that brings the addictive
+              simplicity of dating apps to the world of real estate, but instead
+              of finding your soulmate, you're matching with your dream home or
+              ideal buyer in seconds! With Houser, the days of tedious property
+              searches, endless emails, and missed connections are over—our
+              intuitive, swipe-based platform puts the power directly in your
+              hands, allowing buyers to discover homes that align perfectly with
+              their lifestyle, budget, and must-have features, while sellers get
+              instant access to a pool of serious, pre-qualified buyers who are
+              genuinely interested in what they're offering. For buyers, it's
+              simple: set your filters, swipe through curated listings, and when
+              you find the one, swipe right—if the seller reciprocates, you're
+              instantly connected in a private chat where you can ask questions,
+              share inspiration, schedule viewings, or even make an offer
+              without ever leaving the app.
             </p>
           </div>
         </div>

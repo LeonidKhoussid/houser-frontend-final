@@ -768,6 +768,10 @@ export default function PropertyDashboard() {
           <div className="text-center">
             <div className="text-4xl font-bold text-gray-800 leading-tight tracking-wider">
               <div className="flex flex-col space-y-1">
+                <img
+                  src="https://storage.yandexcloud.net/houser/Group%2066%20(2).png"
+                  className="w-20"
+                />
                 <span>H</span>
                 <span>O</span>
                 <span>U</span>

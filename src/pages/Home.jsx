@@ -46,36 +46,30 @@ export default function HouserLandingPage() {
 
         {/* Property Images Grid */}
         <div className="flex space-x-4 overflow-x-auto pb-4">
-          <div className="flex-shrink-0 w-32 h-32 bg-gray-100 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-              <div className="w-16 h-12 bg-white rounded opacity-60"></div>
+          {[
+            "https://storage.yandexcloud.net/houser/DJI_0281_bj.1011f88e.jpg",
+            "https://storage.yandexcloud.net/houser/5bf49cbfd8cb46ba9c622d17322e1209.jpeg",
+            "https://storage.yandexcloud.net/houser/313364-Alabaster-Caviar-TeakStain-A-copy.jpg",
+            "https://storage.yandexcloud.net/houser/archdaily-houses-104.jpg",
+            "https://storage.yandexcloud.net/houser/hes3-2.jpg",
+            "https://storage.yandexcloud.net/houser/images.jpeg",
+            "https://storage.yandexcloud.net/houser/DJI_0281_bj.1011f88e.jpg",
+            "https://storage.yandexcloud.net/houser/5bf49cbfd8cb46ba9c622d17322e1209.jpeg",
+            "https://storage.yandexcloud.net/houser/313364-Alabaster-Caviar-TeakStain-A-copy.jpg",
+            "https://storage.yandexcloud.net/houser/archdaily-houses-104.jpg",
+            "https://storage.yandexcloud.net/houser/hes3-2.jpg",
+            "https://storage.yandexcloud.net/houser/images.jpeg",
+          ].map((src, index) => (
+            <div
+              key={index}
+              className="flex-shrink-0 w-36 h-36 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transform transition-transform hover:scale-105 bg-white">
+              <img
+                src={src}
+                alt={`House ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
             </div>
-          </div>
-          <div className="flex-shrink-0 w-32 h-32 bg-gray-800 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
-              <div className="w-16 h-12 bg-gray-600 rounded opacity-60"></div>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-32 h-32 bg-gray-200 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-300 flex items-center justify-center">
-              <div className="w-20 h-16 bg-white rounded opacity-80"></div>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-32 h-32 bg-orange-200 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-orange-300 to-red-400 flex items-center justify-center">
-              <div className="w-16 h-12 bg-white rounded opacity-60"></div>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-32 h-32 bg-blue-200 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-blue-300 to-green-400 flex items-center justify-center">
-              <div className="w-16 h-12 bg-white rounded opacity-60"></div>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-32 h-32 bg-purple-200 rounded-xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-purple-300 to-blue-400 flex items-center justify-center">
-              <div className="w-16 h-12 bg-white rounded opacity-60"></div>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
@@ -186,31 +180,27 @@ export default function HouserLandingPage() {
           </p>
 
           {/* House Images */}
-          <div className="flex space-x-4 overflow-x-auto">
-            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden">
-              <div className="w-full h-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-800 flex items-end justify-center">
-                <div
-                  className="w-32 h-40 bg-gradient-to-t from-yellow-600 to-yellow-400 mb-8"
-                  style={{
-                    clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
-                  }}></div>
-              </div>
+          <div className="flex space-x-4 overflow-hidden">
+            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transition-transform transform hover:scale-105">
+              <img
+                src="https://storage.yandexcloud.net/houser/maxresdefault.jpg"
+                alt="House 1"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden">
-              <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-100 flex items-end justify-center">
-                <div className="w-40 h-48 bg-white border-2 border-gray-400 mb-8 relative">
-                  <div className="absolute top-4 left-4 w-6 h-6 bg-gray-300"></div>
-                  <div className="absolute top-4 right-4 w-6 h-6 bg-gray-300"></div>
-                </div>
-              </div>
+            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transition-transform transform hover:scale-105">
+              <img
+                src="https://storage.yandexcloud.net/houser/types-of-houses.jpeg"
+                alt="House 2"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden">
-              <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-400 flex items-end justify-center">
-                <div className="w-36 h-44 bg-gray-700 mb-8 relative">
-                  <div className="absolute top-3 left-3 w-5 h-5 bg-gray-500"></div>
-                  <div className="absolute top-3 right-3 w-5 h-5 bg-gray-500"></div>
-                </div>
-              </div>
+            <div className="flex-shrink-0 w-64 h-64 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transition-transform transform hover:scale-105">
+              <img
+                src="https://storage.yandexcloud.net/houser/white-modern-house-curved-patio-archway-c0a4a3b3-aa51b24d14d0464ea15d36e05aa85ac9.jpg"
+                alt="House 3"
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         </div>

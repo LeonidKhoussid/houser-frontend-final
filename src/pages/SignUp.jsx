@@ -30,6 +30,10 @@ export default function HouserSignup() {
   });
   const [currentTag, setCurrentTag] = useState("");
 
+  const handleSignInClick = () => {
+    window.location.href = "/signin";
+  };
+
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -234,13 +238,10 @@ export default function HouserSignup() {
           <h1 className="text-4xl font-bold text-black">SIGN UP</h1>
           <div className="flex items-center gap-4">
             <h2 className="text-4xl font-light text-gray-700">HOUSER</h2>
-            <div className="w-16 h-16 border-2 border-gray-300 rounded-lg flex items-center justify-center">
-              <div className="w-10 h-8 border-2 border-gray-400 border-b-4 relative">
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-1 h-2 bg-gray-400"></div>
-                <div className="absolute top-1 right-1 w-1 h-1 bg-gray-400"></div>
-                <div className="absolute top-1 left-1 w-1 h-1 bg-gray-400"></div>
-              </div>
-            </div>
+            <img
+              src="https://storage.yandexcloud.net/houser/Group%2066%20(2).png"
+              className="w-20"
+            />
           </div>
         </div>
 
@@ -461,15 +462,20 @@ export default function HouserSignup() {
           </div>
         )}
 
-        {/* Continue Button */}
-        <div className="text-center">
+        {/* Continue & SignIn Buttons */}
+        <div className="flex gap-2 mt-4 justify-center">
           <button
             onClick={handleRegister}
             disabled={isLoading}
-            className={`bg-teal-600 text-white text-xl font-semibold px-12 py-4 rounded-lg transition-colors ${
+            className={`bg-teal-600 text-white text-xl font-semibold px-12 py-4 rounded-lg transition-colors transition-all duration-200 hover:scale-105 ${
               isLoading ? "opacity-50 cursor-not-allowed" : "hover:bg-teal-700"
             }`}>
             {isLoading ? "Creating Account..." : "Continue"}
+          </button>
+          <button
+            className="px-12 py-4 bg-orange-500 text-white text-xl font-semibold rounded-lg hover:bg-orange-600 hover:scale-105 transition-all"
+            onClick={handleSignInClick}>
+            Sign In
           </button>
         </div>
 

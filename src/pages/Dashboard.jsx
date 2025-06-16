@@ -24,13 +24,44 @@ export default function PropertyDashboard() {
   const [swipeLoading, setSwipeLoading] = useState(false);
   const [userCity, setUserCity] = useState("");
   const [showCityModal, setShowCityModal] = useState(false);
+  // Modal filter state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const toggleFilterModal = () => setIsFilterModalOpen((prev) => !prev);
+
+  // Unified filters state for modal and sidebar
   const [filters, setFilters] = useState({
     city: "",
-    type: "",
-    minPrice: "",
-    maxPrice: "",
-    tags: [],
+    country: "",
+    tags: "",
+    price: "",
   });
+
+  // For filtered properties
+  const [filteredProperties, setFilteredProperties] = useState([]);
+
+  // Function to apply filters (replaces previous stub)
+  const applyFilters = () => {
+    const filtered = properties.filter((property) => {
+      const matchesCity =
+        filters.city === "" ||
+        property.city.toLowerCase().includes(filters.city.toLowerCase());
+      const matchesCountry =
+        filters.country === "" ||
+        property.country.toLowerCase().includes(filters.country.toLowerCase());
+      const matchesTags =
+        filters.tags === "" ||
+        property.tags?.some((tag) =>
+          tag.toLowerCase().includes(filters.tags.toLowerCase())
+        );
+      const matchesPrice =
+        filters.price === "" || property.price <= parseFloat(filters.price);
+
+      return matchesCity && matchesCountry && matchesTags && matchesPrice;
+    });
+
+    setFilteredProperties(filtered);
+    setShowFilterModal(false);
+  };
   const [matches, setMatches] = useState(0);
 
   // API configuration
@@ -44,6 +75,8 @@ export default function PropertyDashboard() {
     "https://images.unsplash.com/photo-1520637836862-4d197d17c60a?w=800&h=600&fit=crop&crop=entropy&auto=format&q=80",
     "https://images.unsplash.com/photo-1605146769289-440113cc3d00?w=800&h=600&fit=crop&crop=entropy&auto=format&q=80",
   ];
+
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Check authentication on mount
   useEffect(() => {
@@ -164,16 +197,15 @@ export default function PropertyDashboard() {
     }
   };
 
-  // Build query string for filters
+  // Build query string for filters (for API)
   const buildQueryString = () => {
     const params = new URLSearchParams();
-
     if (filters.city) params.append("city", filters.city);
     if (filters.type) params.append("type", filters.type);
+    if (filters.country) params.append("country", filters.country);
     if (filters.minPrice) params.append("min_price", filters.minPrice);
     if (filters.maxPrice) params.append("max_price", filters.maxPrice);
-    if (filters.tags.length > 0) params.append("tags", filters.tags.join(","));
-
+    if (filters.tags) params.append("tags", filters.tags);
     return params.toString() ? `?${params.toString()}` : "";
   };
 
@@ -192,12 +224,14 @@ export default function PropertyDashboard() {
       if (!Array.isArray(propertiesData)) {
         console.error("Properties response is not an array:", propertiesData);
         setProperties([]);
+        setFilteredProperties([]);
         return;
       }
 
       if (propertiesData.length === 0 && !filters.city) {
         setShowCityModal(true);
         setLoading(false);
+        setFilteredProperties([]);
         return;
       }
 
@@ -227,6 +261,7 @@ export default function PropertyDashboard() {
       });
 
       setProperties(processedProperties);
+      setFilteredProperties(processedProperties);
 
       if (processedProperties.length > 0) {
         setCurrentPropertyIndex(0);
@@ -235,6 +270,7 @@ export default function PropertyDashboard() {
     } catch (err) {
       console.error("Failed to fetch properties:", err);
       setError("Failed to load properties. Please check your connection.");
+      setFilteredProperties([]);
     } finally {
       setLoading(false);
     }
@@ -311,7 +347,7 @@ export default function PropertyDashboard() {
     setCurrentImageIndex(index);
   };
 
-  // Navigate between properties
+  // Navigate between properties (only via explicit button click, not via arrow keys)
   const nextProperty = () => {
     if (properties.length === 0) return;
     const nextIndex = (currentPropertyIndex + 1) % properties.length;
@@ -346,6 +382,9 @@ export default function PropertyDashboard() {
       fetchUser();
       fetchMatchesCount();
     }
+    // Remove any global keydown listeners that would allow property navigation via arrow keys
+    // (If previously implemented, ensure not present)
+    // Example: document.addEventListener("keydown", ...) for ArrowLeft/ArrowRight -- not present
   }, [filters.city]);
 
   // City Selection Modal
@@ -427,10 +466,10 @@ export default function PropertyDashboard() {
             <MapPin className="w-6 h-6 text-white" />
           </div>
 
-          {/* Search Icon */}
-          <div className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center cursor-pointer">
-            <Search className="w-6 h-6 text-white" />
-          </div>
+          {/* more advanced filtering */}
+          <Button onClick={() => setShowFilterModal(true)} className="ml-auto">
+            <Filter className="w-4 h-4 mr-2" />
+          </Button>
 
           {/* Spacer */}
           <div className="flex-1"></div>
@@ -498,8 +537,12 @@ export default function PropertyDashboard() {
     );
   }
 
-  const currentProperty = properties[currentPropertyIndex];
-  const currentImages = currentProperty.images;
+  // Use filteredProperties for rendering
+  const currentProperty =
+    filteredProperties[currentPropertyIndex] ||
+    filteredProperties[0] ||
+    properties[0];
+  const currentImages = currentProperty?.images || [];
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
@@ -530,13 +573,13 @@ export default function PropertyDashboard() {
         </div>
 
         {/* Search Icon */}
-        <div className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center cursor-pointer">
+        <button
+          onClick={toggleFilterModal}
+          className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center cursor-pointer">
           <Search className="w-6 h-6 text-white" />
-        </div>
+        </button>
 
-        {/* Spacer */}
         <div className="flex-1"></div>
-
         {/* Refresh Button */}
         <button
           onClick={fetchProperties}
@@ -544,7 +587,6 @@ export default function PropertyDashboard() {
           title="Refresh Properties">
           <RefreshCw className="w-6 h-6 text-white" />
         </button>
-
         {/* Logout Button */}
         <button
           onClick={handleLogout}
@@ -558,193 +600,167 @@ export default function PropertyDashboard() {
       <div className="flex-1 flex">
         {/* Left Content Area */}
         <div className="flex-1 flex flex-col p-8">
-          {/* Header with navigation and property counter */}
-          <div className="mb-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={prevProperty}
-                className="p-2 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
-                title="Previous Property">
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
-              </button>
-              <div className="text-gray-600">
-                {user?.name && (
-                  <span>
-                    Welcome, <span className="font-semibold">{user.name}</span>{" "}
-                    |{" "}
-                  </span>
-                )}
-                Property {currentPropertyIndex + 1} of {properties.length}
-              </div>
-              <button
-                onClick={nextProperty}
-                className="p-2 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
-                title="Next Property">
-                <ChevronRight className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-            <div className="flex items-center text-gray-600">
-              <MapPin className="w-4 h-4 mr-1" />
-              <span className="font-semibold">{filters.city}</span>
-            </div>
-          </div>
-
-          {/* Property Image Section */}
-          <div className="flex-1">
-            <div className="relative w-full h-80 rounded-2xl overflow-hidden bg-white shadow-lg">
-              {/* Image Navigation Arrows */}
-              {currentImages.length > 1 && (
-                <>
-                  <button
-                    onClick={prevImage}
-                    className="absolute left-4 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-full flex items-center justify-center z-10 transition-all duration-200">
-                    <ChevronLeft className="w-6 h-6 text-white" />
-                  </button>
-
-                  <button
-                    onClick={nextImage}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-full flex items-center justify-center z-10 transition-all duration-200">
-                    <ChevronRight className="w-6 h-6 text-white" />
-                  </button>
-                </>
-              )}
-
-              {/* Property Image */}
-              <div className="w-full h-full relative">
-                <img
-                  src={currentImages[currentImageIndex]}
-                  alt={`${currentProperty.title} - Image ${
-                    currentImageIndex + 1
-                  }`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.src = defaultImages[0];
-                  }}
-                />
-              </div>
-
-              {/* Image Indicators */}
-              {currentImages.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                  {currentImages.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => goToImage(index)}
-                      className={`w-3 h-3 rounded-full transition-all duration-200 ${
-                        index === currentImageIndex
-                          ? "bg-white"
-                          : "bg-white bg-opacity-50"
+          {/* Render filtered properties */}
+          {filteredProperties.length > 0 ? (
+            <>
+              {/* Property Image Section */}
+              <div className="flex-1">
+                <div className="relative w-full h-80 rounded-2xl overflow-hidden bg-white shadow-lg">
+                  {/* Image Navigation Arrows */}
+                  {currentImages.length > 1 && (
+                    <>
+                      <button
+                        onClick={prevImage}
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-full flex items-center justify-center z-10 transition-all duration-200">
+                        <ChevronLeft className="w-6 h-6 text-white" />
+                      </button>
+                      <button
+                        onClick={nextImage}
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-full flex items-center justify-center z-10 transition-all duration-200">
+                        <ChevronRight className="w-6 h-6 text-white" />
+                      </button>
+                    </>
+                  )}
+                  {/* Property Image */}
+                  <div className="w-full h-full relative">
+                    <img
+                      src={currentImages[currentImageIndex]}
+                      alt={`${currentProperty.title} - Image ${
+                        currentImageIndex + 1
                       }`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = defaultImages[0];
+                      }}
                     />
-                  ))}
-                </div>
-              )}
-
-              {/* Property Tags */}
-              <div className="absolute top-4 left-4 flex flex-wrap gap-2 max-w-[70%]">
-                <span className="bg-orange-400 text-white px-4 py-2 rounded-full text-sm font-semibold">
-                  {currentProperty.type.toUpperCase()}
-                </span>
-                {currentProperty.tags &&
-                  currentProperty.tags.length > 0 &&
-                  currentProperty.tags.slice(0, 3).map((tag, index) => (
-                    <span
-                      key={index}
-                      className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
-                      {tag}
-                    </span>
-                  ))}
-              </div>
-            </div>
-
-            {/* Property Details */}
-            <div className="mt-6 space-y-4">
-              {/* Title and Price */}
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                    {currentProperty.title}
-                  </h2>
-                  <div className="space-y-1">
-                    <p className="text-gray-600 flex items-center">
-                      <User className="w-4 h-4 mr-2" />
-                      <strong>Seller:</strong>{" "}
-                      <span className="ml-1">
-                        {currentProperty.seller_name}
-                      </span>
-                    </p>
-                    <p className="text-gray-600 flex items-center">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      <strong>Location:</strong>{" "}
-                      <span className="ml-1">
-                        {currentProperty.city}
-                        {currentProperty.state && `, ${currentProperty.state}`}
-                      </span>
-                    </p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-orange-600">
-                    ${parseFloat(currentProperty.price).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {currentProperty.type === "rent"
-                      ? "per month"
-                      : "sale price"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags Display */}
-              {currentProperty.tags && currentProperty.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {currentProperty.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Description */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-800 mb-2">
-                  Description
-                </h3>
-                <p className="text-gray-700 leading-relaxed">
-                  {currentProperty.description}
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-center space-x-12 pt-6">
-                <button
-                  onClick={() => handleSwipe(false)}
-                  disabled={swipeLoading}
-                  className="w-16 h-16 bg-white border-4 border-red-400 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                  title="Pass on this property">
-                  {swipeLoading ? (
-                    <Loader2 className="w-6 h-6 text-red-400 animate-spin" />
-                  ) : (
-                    <X className="w-6 h-6 text-red-400" strokeWidth={3} />
+                  {/* Image Indicators */}
+                  {currentImages.length > 1 && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                      {currentImages.map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={() => goToImage(index)}
+                          className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                            index === currentImageIndex
+                              ? "bg-white"
+                              : "bg-white bg-opacity-50"
+                          }`}
+                        />
+                      ))}
+                    </div>
                   )}
-                </button>
-                <button
-                  onClick={() => handleSwipe(true)}
-                  disabled={swipeLoading}
-                  className="w-16 h-16 bg-white border-4 border-green-400 rounded-full flex items-center justify-center hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                  title="Like this property">
-                  {swipeLoading ? (
-                    <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
-                  ) : (
-                    <Heart className="w-6 h-6 text-green-400" strokeWidth={3} />
+                  {/* Property Tags */}
+                  <div className="absolute top-4 left-4 flex flex-wrap gap-2 max-w-[70%]">
+                    <span className="bg-orange-400 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                      {currentProperty.type?.toUpperCase()}
+                    </span>
+                    {currentProperty.tags &&
+                      currentProperty.tags.length > 0 &&
+                      currentProperty.tags.slice(0, 3).map((tag, index) => (
+                        <span
+                          key={index}
+                          className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                          {tag}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                {/* Property Details */}
+                <div className="mt-6 space-y-4">
+                  {/* Title and Price */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {currentProperty.title}
+                      </h2>
+                      <div className="space-y-1">
+                        <p className="text-gray-600 flex items-center">
+                          <User className="w-4 h-4 mr-2" />
+                          <strong>Seller:</strong>{" "}
+                          <span className="ml-1">
+                            {currentProperty.seller_name}
+                          </span>
+                        </p>
+                        <p className="text-gray-600 flex items-center">
+                          <MapPin className="w-4 h-4 mr-2" />
+                          <strong>Location:</strong>{" "}
+                          <span className="ml-1">
+                            {currentProperty.city}
+                            {currentProperty.state &&
+                              `, ${currentProperty.state}`}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-orange-600">
+                        ${parseFloat(currentProperty.price).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {currentProperty.type === "rent"
+                          ? "per month"
+                          : "sale price"}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Tags Display */}
+                  {currentProperty.tags && currentProperty.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {currentProperty.tags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                </button>
+                  {/* Description */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Description
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      {currentProperty.description}
+                    </p>
+                  </div>
+                  {/* Action Buttons */}
+                  <div className="flex justify-center space-x-12 pt-6">
+                    <button
+                      onClick={() => handleSwipe(false)}
+                      disabled={swipeLoading}
+                      className="w-16 h-16 bg-white border-4 border-red-400 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      title="Pass on this property">
+                      {swipeLoading ? (
+                        <Loader2 className="w-6 h-6 text-red-400 animate-spin" />
+                      ) : (
+                        <X className="w-6 h-6 text-red-400" strokeWidth={3} />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleSwipe(true)}
+                      disabled={swipeLoading}
+                      className="w-16 h-16 bg-white border-4 border-green-400 rounded-full flex items-center justify-center hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      title="Like this property">
+                      {swipeLoading ? (
+                        <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
+                      ) : (
+                        <Heart
+                          className="w-6 h-6 text-green-400"
+                          strokeWidth={3}
+                        />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
+            </>
+          ) : (
+            <div className="text-center text-gray-500 mt-20">
+              No properties match your filters.
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right Side - HOUSER Text */}
@@ -774,6 +790,90 @@ export default function PropertyDashboard() {
               className="text-white hover:text-gray-200 flex-shrink-0">
               <X className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+      {/* Filter Modal */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white p-6 rounded-md shadow-md w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Filter Properties</h2>
+              <button onClick={toggleFilterModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">City</label>
+                <input
+                  type="text"
+                  value={filters.city}
+                  onChange={(e) =>
+                    setFilters({ ...filters, city: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md"
+                  placeholder="Enter city"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Country
+                </label>
+                <input
+                  type="text"
+                  value={filters.country}
+                  onChange={(e) =>
+                    setFilters({ ...filters, country: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md"
+                  placeholder="Enter country"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Tags</label>
+                <input
+                  type="text"
+                  value={filters.tags}
+                  onChange={(e) =>
+                    setFilters({ ...filters, tags: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md"
+                  placeholder="Comma-separated tags"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Price</label>
+                <input
+                  type="number"
+                  value={filters.price}
+                  onChange={(e) =>
+                    setFilters({ ...filters, price: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md"
+                  placeholder="Max price"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setFilters({ city: "", country: "", tags: "", price: "" });
+                  toggleFilterModal();
+                  setFilteredProperties(properties);
+                }}
+                className="px-4 py-2 text-sm border rounded-md">
+                Clear
+              </button>
+              <button
+                onClick={() => {
+                  toggleFilterModal();
+                  applyFilters();
+                }}
+                className="px-4 py-2 text-sm text-white bg-black rounded-md">
+                Apply Filters
+              </button>
+            </div>
           </div>
         </div>
       )}

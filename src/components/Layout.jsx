@@ -11,7 +11,7 @@ import {
 import { useLayoutContext } from '../App';
 
 export default function Layout({ children, user, onRefresh, onLogout, onCityChange, onFilterToggle }) {
-  const { unreadLikesCount, onMarkLikesAsRead } = useLayoutContext();
+  const { unreadLikesCount, unreadMessagesCount, onMarkLikesAsRead, onMarkMessagesAsRead } = useLayoutContext();
   
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
@@ -21,7 +21,7 @@ export default function Layout({ children, user, onRefresh, onLogout, onCityChan
   };
 
   const handleChatClick = async () => {
-    // Mark likes as read when clicking on chat
+    // Mark both likes and messages as read when clicking on chat
     if (unreadLikesCount > 0 && onMarkLikesAsRead) {
       try {
         await onMarkLikesAsRead();
@@ -29,6 +29,12 @@ export default function Layout({ children, user, onRefresh, onLogout, onCityChan
         console.error('Failed to mark likes as read:', error);
       }
     }
+    
+    // Mark messages as read (this will clear the red dot)
+    if (unreadMessagesCount > 0 && onMarkMessagesAsRead) {
+      onMarkMessagesAsRead();
+    }
+    
     // Navigate to chat
     window.location.href = "/chat";
   };
@@ -47,14 +53,14 @@ export default function Layout({ children, user, onRefresh, onLogout, onCityChan
 
         {/* Chat Icon */}
         <div
-          className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center relative cursor-pointer"
+          className="w-12 h-12 bg-orange-400 rounded-full flex items-center justify-center relative cursor-pointer hover:bg-orange-500 transition-colors"
           onClick={handleChatClick}
           title="View Chats">
           <MessageCircle className="w-6 h-6 text-white" />
-          {unreadLikesCount > 0 && (
-            <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+          {(unreadLikesCount > 0 || unreadMessagesCount > 0) && (
+            <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
               <span className="text-xs text-white font-bold">
-                {unreadLikesCount > 99 ? '99+' : unreadLikesCount}
+                {(unreadLikesCount + unreadMessagesCount) > 99 ? '99+' : (unreadLikesCount + unreadMessagesCount)}
               </span>
             </div>
           )}

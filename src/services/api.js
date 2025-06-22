@@ -1,13 +1,77 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: "http://localhost:8000/api",
   withCredentials: true,
 });
 
+// Add a request interceptor to include the auth token
+api.interceptors.request.use(
+  (config) => {
+    // Don't add auth token for login/register requests
+    const isAuthRequest = config.url?.includes('/login') || config.url?.includes('/register');
+    
+    if (!isAuthRequest) {
+      const token = localStorage.getItem("auth_token");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.log(`API Request: ${config.method?.toUpperCase()} ${config.url} without token`);
+      }
+    } else {
+      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url} (auth endpoint)`);
+    }
+    return config;
+  },
+  (error) => {
+    console.error('API Request interceptor error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add a response interceptor to handle 401 errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    console.log(`API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} -`, error.response?.status, error.message);
+    
+    if (error.response?.status === 401) {
+      console.log('401 Unauthorized error detected');
+      
+      // Define endpoints that should NOT trigger automatic logout
+      const nonCriticalEndpoints = [
+        '/unread-likes-count',
+        '/unread-counts',
+        '/mark-likes-as-read',
+        '/mark-messages-as-read'
+      ];
+      
+      const isNonCriticalEndpoint = nonCriticalEndpoints.some(endpoint => 
+        error.config?.url?.includes(endpoint)
+      );
+      
+      if (isNonCriticalEndpoint) {
+        console.log('401 on non-critical endpoint, not triggering logout');
+        // For non-critical endpoints, just return the error without logging out
+        return Promise.reject(error);
+      } else {
+        console.log('401 on critical endpoint, removing token and redirecting');
+        // For critical endpoints (login, user info, etc.), remove token and redirect
+        localStorage.removeItem("auth_token");
+        delete api.defaults.headers.common["Authorization"];
+        window.location.href = "/signin";
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 // API helper function that can be used across components
 export const apiCall = async (endpoint, options = {}) => {
-  const url = `/api${endpoint}`;
+  const url = `http://localhost:8000/api${endpoint}`;
   const token = localStorage.getItem("auth_token");
 
   if (!token) {

@@ -25,6 +25,7 @@ export default function SignIn() {
       await login({ email, password });
       navigate("/dashboard");
     } catch (err) {
+      console.error('Login failed:', err);
       setError(err.response?.data?.message || err.message || "An error occurred during login");
     } finally {
       setIsLoading(false);

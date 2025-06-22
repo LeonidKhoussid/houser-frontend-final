@@ -13,11 +13,9 @@ export const echo = new Echo({
   enabledTransports: ["ws", "wss"],
   authorizer: (channel, options) => ({
     authorize: (socketId, callback) => {
-      // Get the current auth token dynamically
       const authToken = localStorage.getItem("auth_token");
       
       if (!authToken) {
-        console.error('No auth token found for broadcasting authorization');
         callback(true, { message: 'No auth token' });
         return;
       }
@@ -40,36 +38,28 @@ export const echo = new Echo({
           }
         )
         .then((response) => {
-          console.log('Echo auth request successful for channel:', channel.name);
           callback(false, response.data);
         })
         .catch((error) => {
-          console.error('Echo auth request failed for channel:', channel.name, error.response?.data || error);
           callback(true, error.response || error);
         });
     },
   }),
 });
 
-// Initialize message handlers map
 if (!window.chatMessageHandlers) {
   window.chatMessageHandlers = new Map();
 }
 
-// Initialize new conversation handlers
 if (!window.newConversationHandlers) {
   window.newConversationHandlers = new Set();
 }
 
 export const subscribeToConversation = (conversationId, messageHandler) => {
-  const channelName = `private-conversation.${conversationId}`;
-
-  // Leave previous channel if exists
   if (window.currentChannel) {
     echo.leave(window.currentChannel);
   }
 
-  // Subscribe to new channel
   const channel = echo.private(`conversation.${conversationId}`);
   window.currentChannel = `conversation.${conversationId}`;
 
@@ -88,16 +78,15 @@ export const subscribeToConversation = (conversationId, messageHandler) => {
   return channel;
 };
 
-export const subscribeToUserChannel = (userId, newConversationHandler) => {
-  // Prevent multiple subscriptions to the same user channel
-  if (window.userChannel) {
+export const subscribeToUserChannel = (userId, newConversationHandler, messageHandler, likeHandler) => {
+  const channelName = `user.${userId}`;
+  
+  if (window.userChannel && window.userChannel !== channelName) {
     echo.leave(window.userChannel);
   }
 
-  const userChannel = echo.private(`user.${userId}`);
-  window.userChannel = `user.${userId}`;
-
-  // Store the channel reference for cleanup
+  const userChannel = echo.private(channelName);
+  window.userChannel = channelName;
   window.userChannelRef = userChannel;
 
   if (newConversationHandler) {
@@ -110,44 +99,43 @@ export const subscribeToUserChannel = (userId, newConversationHandler) => {
     });
   }
 
+  if (messageHandler) {
+    userChannel.listen(".MessageSent", (data) => {
+      messageHandler(data);
+    });
+
+    userChannel.listen("MessageSent", (data) => {
+      messageHandler(data);
+    });
+  }
+
+  if (likeHandler) {
+    userChannel.listen('property.liked', (data) => {
+      likeHandler(data);
+    });
+
+    userChannel.listen('.property.liked', (data) => {
+      likeHandler(data);
+    });
+  }
+
   return userChannel;
 };
 
 export const subscribeToLikeNotifications = (userId, likeNotificationHandler) => {
-  // Check if we already have a user channel for this user
-  let channel;
   const channelName = `user.${userId}`;
+  const channel = echo.private(channelName);
   
-  if (window.userChannel === channelName && window.userChannelRef) {
-    // Reuse existing channel
-    channel = window.userChannelRef;
-    console.log(`Reusing existing private channel: ${channelName}`);
-    
-    // Don't add duplicate listeners - return existing channel
-    return channel;
-  } else {
-    // Create new channel
-    channel = echo.private(channelName);
-    window.userChannel = channelName;
-    window.userChannelRef = channel;
-    console.log(`Creating new private channel: ${channelName}`);
-  }
-  
-  // Add the like notification listener (only for new channels)
-  channel.listen('.property.liked', (data) => {
-    console.log('Received property.liked event:', data);
+  channel.listen('property.liked', (data) => {
     if (likeNotificationHandler) {
       likeNotificationHandler(data);
     }
   });
 
-  // Listen to subscription status events
-  channel.on('pusher:subscription_succeeded', () => {
-    console.log(`Successfully subscribed to Pusher channel: ${channelName}`);
-  });
-  
-  channel.on('pusher:subscription_error', (status) => {
-    console.error(`Failed to subscribe to Pusher channel: ${channelName}`, status);
+  channel.listen('.property.liked', (data) => {
+    if (likeNotificationHandler) {
+      likeNotificationHandler(data);
+    }
   });
 
   return channel;
@@ -168,7 +156,6 @@ export const unsubscribeFromUserChannel = () => {
   }
 };
 
-// LEGACY: Keep these for backward compatibility
 export const registerMessageHandler = (conversationId, handler) => {
   if (!window.chatMessageHandlers) {
     window.chatMessageHandlers = new Map();

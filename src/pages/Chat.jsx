@@ -19,6 +19,8 @@ import {
   unsubscribeFromUserChannel,
 } from "../echo";
 import Layout from "../components/Layout";
+import { useLayoutContext } from "../App";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Chat() {
   const [matches, setMatches] = useState([]);
@@ -28,22 +30,42 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState({}); // Track unread counts per conversation
-  const [processedMessages, setProcessedMessages] = useState(new Set()); // Track processed message IDs
+  const [showScrollButton, setShowScrollButton] = useState(false); // Show scroll to bottom button
   const messagesEndRef = useRef(null);
   const currentChannelRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  
+  // Get context functions
+  const { onMarkMessagesAsRead } = useLayoutContext();
+  const { user: currentUser } = useAuth();
 
   const authToken = localStorage.getItem("auth_token");
-  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Auto-scroll when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages.length]); // Scroll when message count changes
 
   useEffect(() => {
     if (messages.length > 0) {
       scrollToBottom();
     }
   }, [selectedMatch?.conversation_id]);
+
+  // Handle scroll detection for scroll-to-bottom button
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollButton(!isNearBottom);
+    }
+  };
 
   const apiCall = async (endpoint, options = {}) => {
     const defaultHeaders = {
@@ -135,34 +157,42 @@ export default function Chat() {
     }
   };
 
-  // Global message listener for unread counts (messages from conversations not currently open)
+  // Global message listener for unread counts and new conversations
   useEffect(() => {
-    if (!currentUser.id) return;
+    if (!currentUser?.id) return;
+
+    const handleNewConversation = (data) => {
+      const newConversation = data.conversation;
+
+      setMatches((prevMatches) => {
+        const exists = prevMatches.some(
+          (match) => match.conversation_id === newConversation.conversation_id
+        );
+        if (exists) return prevMatches;
+
+        const updatedMatches = [newConversation, ...prevMatches];
+        return updatedMatches.sort((a, b) => {
+          const aTime = new Date(a.last_message_at || a.created_at || 0);
+          const bTime = new Date(b.last_message_at || b.created_at || 0);
+          return bTime - aTime;
+        });
+      });
+
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [newConversation.conversation_id]: 1,
+      }));
+    };
 
     const handleGlobalMessage = (data) => {
       const { message } = data;
 
-      if (message.sender_id === currentUser.id) return;
-
-      if (processedMessages.has(message.id)) {
+      if (message.sender_id === currentUser?.id) {
         return;
       }
 
       const messageConversationId = message.conversation_id;
-      const currentlySelectedConversationId = selectedMatch?.conversation_id;
-
-      if (messageConversationId !== currentlySelectedConversationId) {
-        setUnreadCounts((prev) => {
-          const currentCount = prev[messageConversationId] || 0;
-          return {
-            ...prev,
-            [messageConversationId]: currentCount + 1,
-          };
-        });
-
-        setProcessedMessages((prev) => new Set([...prev, message.id]));
-      }
-
+      
       setMatches((prevMatches) => {
         const updatedMatches = prevMatches.map((match) => {
           if (match.conversation_id === messageConversationId) {
@@ -180,20 +210,38 @@ export default function Chat() {
           return bTime - aTime;
         });
       });
+
+      setSelectedMatch((currentSelected) => {
+        const currentlySelectedConversationId = currentSelected?.conversation_id;
+        
+        if (messageConversationId !== currentlySelectedConversationId) {
+          setUnreadCounts((prev) => {
+            const currentCount = prev[messageConversationId] || 0;
+            const newCount = currentCount + 1;
+            return {
+              ...prev,
+              [messageConversationId]: newCount,
+            };
+          });
+        }
+        
+        return currentSelected;
+      });
     };
 
+    // Subscribe to user channel with both handlers
     const userChannel = subscribeToUserChannel(
       currentUser.id,
-      handleGlobalMessage
+      handleNewConversation,
+      handleGlobalMessage,
+      null // No like handler needed in chat
     );
 
     return () => {
-      if (userChannel) {
-        userChannel.stopListening(".MessageSent");
-        userChannel.stopListening("MessageSent");
-      }
+      unsubscribeFromUserChannel();
     };
-  }, [selectedMatch?.conversation_id, currentUser.id, processedMessages]);
+  }, [currentUser?.id]); // Only depend on currentUser.id
+
   // Real-time message handling for current conversation
   useEffect(() => {
     if (!selectedMatch?.conversation_id) {
@@ -222,6 +270,7 @@ export default function Chat() {
           }
 
           const newMessages = [...prevMessages, message];
+          // Scroll to bottom after a short delay to ensure DOM is updated
           setTimeout(() => scrollToBottom(), 100);
           return newMessages;
         });
@@ -278,124 +327,39 @@ export default function Chat() {
     };
   }, [selectedMatch?.conversation_id, currentUser.id]);
 
-  // Listen for new conversations (when someone starts a new chat)
-  useEffect(() => {
-    if (!currentUser.id) return;
-
-    const handleNewConversation = (data) => {
-      const newConversation = data.conversation;
-
-      // Add the new conversation to the matches list
-      setMatches((prevMatches) => {
-        // Check if conversation already exists
-        const exists = prevMatches.some(
-          (match) => match.conversation_id === newConversation.conversation_id
-        );
-        if (exists) return prevMatches;
-
-        // Add new conversation to the top and re-sort by most recent
-        const updatedMatches = [newConversation, ...prevMatches];
-        return updatedMatches.sort((a, b) => {
-          const aTime = new Date(a.last_message_at || a.created_at || 0);
-          const bTime = new Date(b.last_message_at || b.created_at || 0);
-          return bTime - aTime;
-        });
-      });
-
-      // Initialize unread count for new conversation
-      setUnreadCounts((prev) => ({
-        ...prev,
-        [newConversation.conversation_id]: 1, // New conversation has 1 unread message
-      }));
-    };
-
-    const handleGlobalMessage = (data) => {
-      const { message } = data;
-
-      // Only process messages from other users
-      if (message.sender_id === currentUser.id) return;
-
-      // Prevent duplicate processing of the same message
-      if (processedMessages.has(message.id)) {
-        return;
-      }
-
-      const messageConversationId = message.conversation_id;
-      const currentlySelectedConversationId = selectedMatch?.conversation_id;
-
-      // If the message is NOT from the currently selected conversation, increment unread count
-      if (messageConversationId !== currentlySelectedConversationId) {
-        setUnreadCounts((prev) => {
-          const currentCount = prev[messageConversationId] || 0;
-          return {
-            ...prev,
-            [messageConversationId]: currentCount + 1,
-          };
-        });
-
-        // Mark this message as processed
-        setProcessedMessages((prev) => new Set([...prev, message.id]));
-      }
-
-      // Update the conversation's last_message_at in the matches list
-      setMatches((prevMatches) => {
-        const updatedMatches = prevMatches.map((match) => {
-          if (match.conversation_id === messageConversationId) {
-            return {
-              ...match,
-              last_message_at: message.created_at,
-            };
-          }
-          return match;
-        });
-
-        // Re-sort by most recent message
-        return updatedMatches.sort((a, b) => {
-          const aTime = new Date(a.last_message_at || a.created_at || 0);
-          const bTime = new Date(b.last_message_at || b.created_at || 0);
-          return bTime - aTime;
-        });
-      });
-    };
-
-    // Subscribe to user channel with both handlers
-    const userChannel = subscribeToUserChannel(
-      currentUser.id,
-      handleNewConversation,
-      handleGlobalMessage
-    );
-
-    return () => {
-      unsubscribeFromUserChannel();
-    };
-  }, [selectedMatch?.conversation_id, currentUser.id, processedMessages]);
-
   // Select a match and load messages
   const selectMatch = (match) => {
     setSelectedMatch(match);
     fetchMessages(match.conversation_id);
   };
 
-  // Fetch unread counts on component mount
-  const fetchUnreadCounts = async () => {
-    try {
-      const data = await apiCall("/unread-counts");
-      if (typeof data === "object" && data !== null) {
-        setUnreadCounts(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch unread counts:", error);
-      setUnreadCounts({});
-    }
-  };
-
-  // Initial load
   useEffect(() => {
     if (authToken) {
       fetchMatches();
-      setUnreadCounts({});
     }
   }, []);
+
+  // Mark messages as read when component mounts
+  useEffect(() => {
+    if (onMarkMessagesAsRead) {
+      onMarkMessagesAsRead();
+    }
+  }, [onMarkMessagesAsRead]);
+
+  // Test function to check if broadcasting works
+  const testBroadcasting = async () => {
+    try {
+      const response = await apiCall("/test-broadcast", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Test broadcast from frontend",
+          user_id: currentUser?.id,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to test broadcast:", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -425,7 +389,15 @@ export default function Chat() {
       <div className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
+            <button 
+              onClick={testBroadcasting}
+              className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+            >
+              🧪 Test Broadcasting
+            </button>
+          </div>
         </div>
 
         {/* Main Chat Area */}
@@ -492,16 +464,18 @@ export default function Chat() {
                                 </span>
                               )}
                             </h3>
-                            <p className="text-sm text-gray-600 truncate">
-                              {property.title}
-                            </p>
-                            {unreadCount > 0 && (
-                              <div className="w-5 h-5 bg-orange-400 rounded-full flex items-center justify-center">
-                                <span className="text-xs text-white font-medium">
-                                  {unreadCount}
-                                </span>
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-gray-600 truncate flex-1">
+                                {property.title}
+                              </p>
+                              {unreadCount > 0 && (
+                                <div className="ml-2 min-w-[20px] h-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
+                                  <span className="text-xs text-white font-bold px-1">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -536,33 +510,56 @@ export default function Chat() {
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                      {messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${message.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
+                    <div className="flex-1 relative overflow-hidden">
+                      <div 
+                        ref={messagesContainerRef}
+                        onScroll={handleScroll}
+                        className="absolute inset-0 overflow-y-auto p-4 space-y-4"
+                      >
+                        {messages.map((message) => {
+                          const isOwnMessage = currentUser?.id && message.sender_id === currentUser.id;
+                          
+                          return (
+                            <div
+                              key={message.id}
+                              className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                  isOwnMessage
+                                    ? 'bg-orange-400 text-white'
+                                    : 'bg-gray-200 text-gray-800'
+                                }`}
+                              >
+                                <p className="text-sm">{message.content}</p>
+                                <p className={`text-xs mt-1 ${
+                                  isOwnMessage ? 'text-orange-100' : 'text-gray-500'
+                                }`}>
+                                  {new Date(message.created_at).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Scroll to bottom element */}
+                        <div ref={messagesEndRef} />
+                      </div>
+                      
+                      {/* Scroll to bottom button */}
+                      {showScrollButton && (
+                        <button
+                          onClick={scrollToBottom}
+                          className="absolute bottom-4 right-4 bg-orange-400 text-white p-3 rounded-full shadow-lg hover:bg-orange-500 transition-colors z-10"
+                          title="Scroll to bottom"
                         >
-                          <div
-                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                              message.sender_id === currentUser.id
-                                ? 'bg-orange-400 text-white'
-                                : 'bg-gray-200 text-gray-800'
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <p className={`text-xs mt-1 ${
-                              message.sender_id === currentUser.id ? 'text-orange-100' : 'text-gray-500'
-                            }`}>
-                              {new Date(message.created_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {/* Scroll to bottom element */}
-                      <div ref={messagesEndRef} />
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
 
                     {/* Message Input */}

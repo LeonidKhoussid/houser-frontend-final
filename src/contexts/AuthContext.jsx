@@ -12,16 +12,29 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      getUserService()
-        .then(response => {
-          setUser(response.data);
-        })
-        .catch(() => {
-          localStorage.removeItem('auth_token');
-          setToken(null);
-          delete api.defaults.headers.common['Authorization'];
-        })
-        .finally(() => setLoading(false));
+      
+      if (!user) {
+        getUserService()
+          .then(response => {
+            setUser(response.data);
+            localStorage.setItem('user', JSON.stringify(response.data));
+          })
+          .catch(error => {
+            if (error.response?.status === 401) {
+              localStorage.removeItem('auth_token');
+              setToken(null);
+              setUser(null);
+              delete api.defaults.headers.common['Authorization'];
+            } else {
+              setUser(null);
+            }
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
@@ -30,24 +43,36 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     const response = await loginService(credentials);
     const { access_token, user } = response.data;
+    
     localStorage.setItem('auth_token', access_token);
-    setToken(access_token);
-    setUser(user);
+    localStorage.setItem('user', JSON.stringify(user));
+    
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    
+    setUser(user);
+    setToken(access_token);
   };
 
   const register = async (data) => {
     const response = await registerService(data);
     const { access_token, user } = response.data;
+    
     localStorage.setItem('auth_token', access_token);
-    setToken(access_token);
-    setUser(user);
+    localStorage.setItem('user', JSON.stringify(user));
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    setUser(user);
+    setToken(access_token);
   };
 
   const logout = async () => {
-    await logoutService();
+    try {
+      await logoutService();
+    } catch (error) {
+      console.error('Logout request failed, but clearing local data anyway:', error);
+    }
+    
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
     delete api.defaults.headers.common['Authorization'];

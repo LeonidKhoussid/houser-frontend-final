@@ -7,3 +7,5 @@ export const swipeProperty = (propertyId, data) =>
 export const fetchMatches = () => api.get("/matches");
 export const getUnreadLikesCount = () => api.get('/unread-likes-count');
 export const markLikesAsRead = () => api.post('/mark-likes-as-read');
+export const getUnreadMessagesCount = () => api.get('/unread-counts');
+export const markMessagesAsRead = () => api.post('/mark-messages-as-read');

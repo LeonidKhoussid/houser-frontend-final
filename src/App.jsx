@@ -12,9 +12,9 @@ import UserProfile from "./pages/UserProfile";
 import PropertyDetail from './pages/PropertyDetail';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { subscribeToLikeNotifications, unsubscribeFromUserChannel } from './echo';
+import { subscribeToLikeNotifications, subscribeToUserChannel, unsubscribeFromUserChannel } from './echo';
 import LikeNotificationModal from './components/LikeNotificationModal';
-import { getUnreadLikesCount, markLikesAsRead } from './services/property';
+import { getUnreadLikesCount, markLikesAsRead, getUnreadMessagesCount, markMessagesAsRead } from './services/property';
 
 // Create context for layout props
 const LayoutContext = createContext();
@@ -22,7 +22,7 @@ const LayoutContext = createContext();
 export const useLayoutContext = () => {
   const context = useContext(LayoutContext);
   if (!context) {
-    return { unreadLikesCount: 0, onMarkLikesAsRead: () => {} };
+    return { unreadLikesCount: 0, unreadMessagesCount: 0, onMarkLikesAsRead: () => {}, onMarkMessagesAsRead: () => {} };
   }
   return context;
 };
@@ -31,6 +31,7 @@ const AppRoutes = () => {
   const { user, token, loading } = useAuth();
   const [likeNotification, setLikeNotification] = useState(null);
   const [unreadLikesCount, setUnreadLikesCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   // Fetch initial unread likes count
   const fetchUnreadLikesCount = async () => {
@@ -39,43 +40,84 @@ const AppRoutes = () => {
       setUnreadLikesCount(response.count || 0);
     } catch (error) {
       console.error('Failed to fetch unread likes count:', error);
+      // Don't trigger logout for unread counts - just set to 0
       setUnreadLikesCount(0);
+    }
+  };
+
+  // Fetch unread messages count
+  const fetchUnreadMessagesCount = async () => {
+    try {
+      const response = await getUnreadMessagesCount();
+      // Calculate total unread messages across all conversations
+      const total = Object.values(response.data || {}).reduce((sum, count) => sum + count, 0);
+      setUnreadMessagesCount(total);
+    } catch (error) {
+      console.error('Failed to fetch unread messages count:', error);
+      // Don't trigger logout for unread counts - just set to 0
+      setUnreadMessagesCount(0);
     }
   };
 
   // Mark likes as read
   const handleMarkLikesAsRead = async () => {
-    await markLikesAsRead();
-    setUnreadLikesCount(0);
+    try {
+      await markLikesAsRead();
+      setUnreadLikesCount(0);
+    } catch (error) {
+      console.error('Failed to mark likes as read:', error);
+    }
+  };
+
+  // Mark messages as read (called when entering chat)
+  const handleMarkMessagesAsRead = async () => {
+    try {
+      await markMessagesAsRead();
+      setUnreadMessagesCount(0);
+    } catch (error) {
+      console.error('Failed to mark messages as read:', error);
+    }
   };
 
   useEffect(() => {
-    if (user) {
-      // Initial fetch of unread count
-      fetchUnreadLikesCount();
+    if (user && token) {
+      const setupNotifications = async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        fetchUnreadLikesCount();
+        fetchUnreadMessagesCount();
+      };
+
+      setupNotifications();
       
-      console.log('App.jsx: Subscribing to like notifications for user:', user.id);
-      const channel = subscribeToLikeNotifications(user.id, (data) => {
-        console.log('App.jsx: Received property.liked event:', data);
-        
-        // Show popup notification
-        setLikeNotification({
-          ...data,
-          timestamp: Date.now()
-        });
-        
-        // Increment red dot count
-        setUnreadLikesCount(prev => prev + 1);
-        
-        // Show toast
-        toast.success(data.message);
-      });
+      const userChannel = subscribeToUserChannel(
+        user.id, 
+        null,
+        (data) => {
+          if (data.message && data.message.sender_id !== user.id) {
+            const isOnChatPage = window.location.pathname === '/chat';
+            
+            if (!isOnChatPage) {
+              setUnreadMessagesCount(prev => prev + 1);
+              toast.success(`New message from ${data.message.sender_name || 'someone'}!`);
+            }
+          }
+        },
+        (data) => {
+          setLikeNotification({
+            ...data,
+            timestamp: Date.now()
+          });
+          
+          setUnreadLikesCount(prev => prev + 1);
+          toast.success(data.message);
+        }
+      );
 
       return () => {
-        console.log('App.jsx: Cleaning up like notification subscription.');
+        unsubscribeFromUserChannel();
       };
     }
-  }, [user]);
+  }, [user, token]);
 
   const handleLikeBack = () => {
     toast.success("Thanks for liking back!");
@@ -92,7 +134,9 @@ const AppRoutes = () => {
 
   const layoutContextValue = {
     unreadLikesCount,
-    onMarkLikesAsRead: handleMarkLikesAsRead
+    unreadMessagesCount,
+    onMarkLikesAsRead: handleMarkLikesAsRead,
+    onMarkMessagesAsRead: handleMarkMessagesAsRead
   };
 
   return (

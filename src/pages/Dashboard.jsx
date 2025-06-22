@@ -204,39 +204,24 @@ export default function PropertyDashboard() {
 
   // Handle selectedProperty from navigation state
   useEffect(() => {
-    console.log("🔍 Location state:", location.state);
-    console.log("🔍 Selected property:", location.state?.selectedProperty);
-    console.log("🔍 Properties loaded:", properties.length);
-
     if (location.state?.selectedProperty && properties.length > 0) {
       const selectedProperty = location.state.selectedProperty;
-      console.log("🔍 Looking for property ID:", selectedProperty.id);
-      console.log(
-        "🔍 Available property IDs:",
-        properties.map((p) => p.id)
-      );
 
       let propertyIndex = properties.findIndex(
         (p) => p.id === selectedProperty.id
       );
-      console.log("🔍 Found property at index:", propertyIndex);
 
       if (propertyIndex !== -1) {
         setCurrentPropertyIndex(propertyIndex);
         setCurrentImageIndex(0);
-        console.log("✅ Set current property index to:", propertyIndex);
       } else {
-        // Property not found in current properties, add it to the beginning
-        console.log("❌ Property not found in loaded properties, adding it");
         const updatedProperties = [selectedProperty, ...properties];
         setProperties(updatedProperties);
         setFilteredProperties(updatedProperties);
         setCurrentPropertyIndex(0);
         setCurrentImageIndex(0);
-        console.log("✅ Added property to beginning, set index to 0");
       }
 
-      // Clear the navigation state to prevent re-triggering
       window.history.replaceState({}, document.title);
     }
   }, [location.state?.selectedProperty, properties]);

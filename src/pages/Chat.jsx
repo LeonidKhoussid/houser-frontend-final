@@ -346,20 +346,7 @@ export default function Chat() {
     }
   }, [onMarkMessagesAsRead]);
 
-  // Test function to check if broadcasting works
-  const testBroadcasting = async () => {
-    try {
-      const response = await apiCall("/test-broadcast", {
-        method: "POST",
-        body: JSON.stringify({
-          message: "Test broadcast from frontend",
-          user_id: currentUser?.id,
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to test broadcast:", error);
-    }
-  };
+  
 
   if (loading) {
     return (
@@ -391,12 +378,7 @@ export default function Chat() {
         <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
-            <button 
-              onClick={testBroadcasting}
-              className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-            >
-              🧪 Test Broadcasting
-            </button>
+            
           </div>
         </div>
 

@@ -4,17 +4,24 @@ import axios from "axios";
 
 window.Pusher = Pusher;
 
-const authToken = localStorage.getItem("auth_token");
-
 export const echo = new Echo({
   broadcaster: "pusher",
-  key: import.meta.env.VITE_PUSHER_APP_KEY,
-  cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+  key: "9ce5690a9e6800eb5aeb",
+  cluster: "eu",
   forceTLS: true,
   encrypted: true,
   enabledTransports: ["ws", "wss"],
   authorizer: (channel, options) => ({
     authorize: (socketId, callback) => {
+      // Get the current auth token dynamically
+      const authToken = localStorage.getItem("auth_token");
+      
+      if (!authToken) {
+        console.error('No auth token found for broadcasting authorization');
+        callback(true, { message: 'No auth token' });
+        return;
+      }
+      
       axios
         .post(
           "/broadcasting/auth",
@@ -23,7 +30,7 @@ export const echo = new Echo({
             channel_name: channel.name,
           },
           {
-            baseURL: import.meta.env.VITE_API_BASE_URL,
+            baseURL: "http://localhost:8000",
             headers: {
               Authorization: `Bearer ${authToken}`,
               "Content-Type": "application/json",
@@ -33,9 +40,11 @@ export const echo = new Echo({
           }
         )
         .then((response) => {
+          console.log('Echo auth request successful for channel:', channel.name);
           callback(false, response.data);
         })
         .catch((error) => {
+          console.error('Echo auth request failed for channel:', channel.name, error.response?.data || error);
           callback(true, error.response || error);
         });
     },
@@ -102,6 +111,46 @@ export const subscribeToUserChannel = (userId, newConversationHandler) => {
   }
 
   return userChannel;
+};
+
+export const subscribeToLikeNotifications = (userId, likeNotificationHandler) => {
+  // Check if we already have a user channel for this user
+  let channel;
+  const channelName = `user.${userId}`;
+  
+  if (window.userChannel === channelName && window.userChannelRef) {
+    // Reuse existing channel
+    channel = window.userChannelRef;
+    console.log(`Reusing existing private channel: ${channelName}`);
+    
+    // Don't add duplicate listeners - return existing channel
+    return channel;
+  } else {
+    // Create new channel
+    channel = echo.private(channelName);
+    window.userChannel = channelName;
+    window.userChannelRef = channel;
+    console.log(`Creating new private channel: ${channelName}`);
+  }
+  
+  // Add the like notification listener (only for new channels)
+  channel.listen('.property.liked', (data) => {
+    console.log('Received property.liked event:', data);
+    if (likeNotificationHandler) {
+      likeNotificationHandler(data);
+    }
+  });
+
+  // Listen to subscription status events
+  channel.on('pusher:subscription_succeeded', () => {
+    console.log(`Successfully subscribed to Pusher channel: ${channelName}`);
+  });
+  
+  channel.on('pusher:subscription_error', (status) => {
+    console.error(`Failed to subscribe to Pusher channel: ${channelName}`, status);
+  });
+
+  return channel;
 };
 
 export const unsubscribeFromConversation = () => {

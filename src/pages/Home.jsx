@@ -10,7 +10,6 @@ export default function HouserLandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <header className="flex justify-between items-center px-4 py-4 border-b">
         <div className="flex space-x-8">
           <button className="text-gray-700 font-medium">BUY</button>

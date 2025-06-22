@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation, Link } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,16 +13,23 @@ import {
   MapPin,
   Filter,
   LogOut,
+  DollarSign,
+  Home,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import Layout from "../components/Layout";
+import { apiCall, getImageUrls } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function PropertyDashboard() {
+  const location = useLocation();
   const [currentPropertyIndex, setCurrentPropertyIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [user, setUser] = useState(null);
+  const { user, logout } = useAuth();
   const [swipeLoading, setSwipeLoading] = useState(false);
   const [userCity, setUserCity] = useState("");
   const [showCityModal, setShowCityModal] = useState(false);
@@ -51,9 +59,10 @@ export default function PropertyDashboard() {
         property.country.toLowerCase().includes(filters.country.toLowerCase());
       const matchesTags =
         filters.tags === "" ||
-        (Array.isArray(property.tags) && property.tags.some((tag) =>
-          tag.toLowerCase().includes(filters.tags.toLowerCase())
-        ));
+        (Array.isArray(property.tags) &&
+          property.tags.some((tag) =>
+            tag.toLowerCase().includes(filters.tags.toLowerCase())
+          ));
       const matchesPrice =
         filters.price === "" || property.price <= parseFloat(filters.price);
 
@@ -79,123 +88,36 @@ export default function PropertyDashboard() {
 
   const [showFilterModal, setShowFilterModal] = useState(false);
 
-  // Check authentication on mount
+  // Check authentication and setup based on user data
   useEffect(() => {
-    // Small delay to ensure localStorage is properly set after redirect
-    const checkAuth = setTimeout(() => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        console.log("No auth token found, redirecting to signin");
-        window.location.href = "/signin";
-        return;
+    if (location.pathname !== '/dashboard') return;
+
+    // Prioritize city from localStorage, as it reflects the user's most recent explicit choice.
+    const savedCity = localStorage.getItem("user_city");
+    if (savedCity) {
+      if (filters.city !== savedCity) {
+          setFilters(prev => ({...prev, city: savedCity}));
       }
+      return; 
+    }
 
-      // Get user data from localStorage
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-
-          // If user has a city, use it as default
-          if (userData.city && !localStorage.getItem("user_city")) {
-            setUserCity(userData.city);
-            localStorage.setItem("user_city", userData.city);
-            setFilters((prev) => ({ ...prev, city: userData.city }));
-          }
-        } catch (e) {
-          console.error("Failed to parse user data:", e);
+    // If no city in localStorage, wait for the user object to load from context.
+    if (user) {
+        if (user.city) {
+            // If the user has a city on their profile, use it and save it for next time.
+            setFilters(prev => ({...prev, city: user.city}));
+            localStorage.setItem("user_city", user.city);
+        } else {
+            // If no saved city and no profile city, prompt the user.
+            setShowCityModal(true);
         }
-      }
-
-      // Get saved city preference
-      const savedCity = localStorage.getItem("user_city");
-      if (savedCity) {
-        setUserCity(savedCity);
-        setFilters((prev) => ({ ...prev, city: savedCity }));
-      } else if (!storedUser || !JSON.parse(storedUser).city) {
-        setShowCityModal(true);
-      }
-    }, 100);
-
-    return () => clearTimeout(checkAuth);
-  }, []);
-
-  // API helper function
-  const apiCall = async (endpoint, options = {}) => {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const token = localStorage.getItem("auth_token");
-
-    console.log("Making API call to:", url);
-    console.log("Token exists:", !!token);
-
-    if (!token) {
-      console.error("No auth token found");
-      window.location.href = "/signin";
-      return;
     }
-
-    const config = {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      ...options,
-    };
-
-    try {
-      const response = await fetch(url, config);
-
-      console.log("Response status:", response.status);
-
-      if (response.status === 401) {
-        // // Only clear storage if we get a 401 (unauthorized)
-        // console.error("Token expired or invalid for endpoint:", endpoint);
-        // // Don't immediately clear - check if it's a real auth issue
-        // if (endpoint == "/properties") {
-        //   // Properties endpoint doesn't require auth for GET
-        //   localStorage.removeItem("auth_token");
-        //   localStorage.removeItem("user");
-        //   window.location.href = "/signin";
-        // }
-        // return;
-
-        const body = await response.text();
-        console.warn("401 response body for /matches:", body);
-
-        // Do not redirect — just return null
-        if (endpoint === "/matches") return null;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("API Error:", errorData);
-        throw new Error(
-          errorData.message || `HTTP error! status: ${response.status}`
-        );
-      }
-
-      return await response.json();
-    } catch (err) {
-      console.error("API call failed:", err);
-      throw err;
-    }
-  };
+  }, [user, location.pathname, filters.city]);
 
   // Don't fetch user on mount - we already have it in localStorage
   const fetchUser = async () => {
-    // Only fetch if we don't have user data
-    if (!user) {
-      try {
-        const userData = await apiCall("/user");
-        setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
-      } catch (err) {
-        console.error("Failed to fetch user:", err);
-        // Don't redirect on user fetch failure - use localStorage data
-      }
-    }
+    // This function can be removed if `useAuth` provides the user object reliably.
+    // For now, we'll assume it might be needed if the user object is not immediately available.
   };
 
   // Build query string for filters (for API)
@@ -210,98 +132,114 @@ export default function PropertyDashboard() {
     return params.toString() ? `?${params.toString()}` : "";
   };
 
-  // Fetch properties
+  // Fetch properties with swipe filtering
   const fetchProperties = async () => {
     try {
       setLoading(true);
       setError(null);
 
       const queryString = buildQueryString();
-      const response = await apiCall(`/properties${queryString}`);
+      const url = `/properties${queryString}`;
+      const propertiesData = await apiCall(url);
 
-      // Handle paginated response or array
-      const propertiesData = response.data || response;
-
-      if (!Array.isArray(propertiesData)) {
-        console.error("Properties response is not an array:", propertiesData);
+      if (propertiesData && propertiesData.data) {
+        setProperties(propertiesData.data);
+        setFilteredProperties(propertiesData.data);
+      } else {
         setProperties([]);
         setFilteredProperties([]);
-        return;
-      }
-
-      if (propertiesData.length === 0 && !filters.city) {
-        setShowCityModal(true);
-        setLoading(false);
-        setFilteredProperties([]);
-        return;
-      }
-
-      // Process properties to ensure all required fields
-      const processedProperties = propertiesData.map((property) => {
-        console.log("Property", property.id, "images field:", property.images);
-        
-        let images = defaultImages;
-
-        // First check for the new images array structure (highest priority)
-        if (property.images && Array.isArray(property.images) && property.images.length > 0) {
-          // Use the new images array structure - only show uploaded images
-          console.log("Using images array:", property.images);
-          images = property.images.map(img => {
-            // If the image path doesn't start with http, it's a relative path that needs to be processed
-            if (img && !img.startsWith('http')) {
-              const fullUrl = `https://storage.yandexcloud.net/houser/${img}`;
-              console.log("Converting relative path to full URL:", img, "->", fullUrl);
-              return fullUrl;
-            }
-            console.log("Using absolute URL:", img);
-            return img;
-          });
-          // Don't add default images - only show the uploaded ones
-        } else if (property.image_url) {
-          // Fallback to image_url attribute
-          console.log("Using image_url:", property.image_url);
-          images = [property.image_url, ...defaultImages.slice(1)];
-        } else if (property.image && property.image !== "default.jpg") {
-          // Fallback for backward compatibility with old image field
-          console.log("Using fallback image field:", property.image);
-          if (typeof property.image === "string") {
-            const imageUrl = property.image.startsWith('http') ? property.image : `https://storage.yandexcloud.net/houser/${property.image}`;
-            images = [imageUrl, ...defaultImages.slice(1)];
-          } else if (Array.isArray(property.image)) {
-            images = property.image.length > 0 ? property.image : defaultImages;
-          }
-        } else {
-          console.log("No custom images found, using defaults");
-        }
-
-        return {
-          ...property,
-          images: images,
-          seller_name: property.user?.name || "Unknown Seller",
-          title: property.title || "Beautiful Property",
-          description: property.description || "No description available.",
-          price: property.price || 0,
-          type: property.type || "rent",
-          city: property.city || "Unknown",
-          tags: property.tags || [],
-        };
-      });
-
-      setProperties(processedProperties);
-      setFilteredProperties(processedProperties);
-
-      if (processedProperties.length > 0) {
-        setCurrentPropertyIndex(0);
-        setCurrentImageIndex(0);
       }
     } catch (err) {
-      console.error("Failed to fetch properties:", err);
-      setError("Failed to load properties. Please check your connection.");
+      setError("Failed to fetch properties. Please try again.");
+      setProperties([]);
       setFilteredProperties([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Apply swipe filtering to properties
+  useEffect(() => {
+    if (location.pathname !== '/dashboard') return;
+    const applySwipeFiltering = async () => {
+      if (properties.length > 0) {
+        const filteredProperties = await filterSwipedProperties(properties);
+        setFilteredProperties(filteredProperties);
+
+        // Adjust current property index if needed
+        if (
+          currentPropertyIndex >= filteredProperties.length &&
+          filteredProperties.length > 0
+        ) {
+          setCurrentPropertyIndex(0);
+          setCurrentImageIndex(0);
+        }
+      }
+    };
+
+    applySwipeFiltering();
+  }, [properties, location.pathname]);
+
+  // Filter out swiped properties
+  const filterSwipedProperties = async (propertiesList) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      if (!token) return propertiesList;
+
+      // Fetch current user's swipes
+      const swipes = await apiCall(`/swipes`);
+
+      if (Array.isArray(swipes)) {
+        const swipedPropertyIds = new Set(swipes.map((s) => s.property_id));
+        return propertiesList.filter(
+          (p) => !swipedPropertyIds.has(p.id)
+        );
+      }
+      return propertiesList;
+    } catch (err) {
+      console.error("Failed to filter swiped properties:", err);
+      return propertiesList; // Return original list on error
+    }
+  };
+
+  // Handle selectedProperty from navigation state
+  useEffect(() => {
+    console.log("🔍 Location state:", location.state);
+    console.log("🔍 Selected property:", location.state?.selectedProperty);
+    console.log("🔍 Properties loaded:", properties.length);
+
+    if (location.state?.selectedProperty && properties.length > 0) {
+      const selectedProperty = location.state.selectedProperty;
+      console.log("🔍 Looking for property ID:", selectedProperty.id);
+      console.log(
+        "🔍 Available property IDs:",
+        properties.map((p) => p.id)
+      );
+
+      let propertyIndex = properties.findIndex(
+        (p) => p.id === selectedProperty.id
+      );
+      console.log("🔍 Found property at index:", propertyIndex);
+
+      if (propertyIndex !== -1) {
+        setCurrentPropertyIndex(propertyIndex);
+        setCurrentImageIndex(0);
+        console.log("✅ Set current property index to:", propertyIndex);
+      } else {
+        // Property not found in current properties, add it to the beginning
+        console.log("❌ Property not found in loaded properties, adding it");
+        const updatedProperties = [selectedProperty, ...properties];
+        setProperties(updatedProperties);
+        setFilteredProperties(updatedProperties);
+        setCurrentPropertyIndex(0);
+        setCurrentImageIndex(0);
+        console.log("✅ Added property to beginning, set index to 0");
+      }
+
+      // Clear the navigation state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state?.selectedProperty, properties]);
 
   // Save city preference
   const saveCityPreference = () => {
@@ -314,36 +252,26 @@ export default function PropertyDashboard() {
   };
 
   // Handle swipe action
-  const handleSwipe = async (isLike) => {
-    if (!properties[currentPropertyIndex] || swipeLoading) return;
+  const handleSwipe = async (isLike, event) => {
+    // Prevent the link navigation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    if (swipeLoading || !filteredProperties[currentPropertyIndex]) return;
 
+    setSwipeLoading(true);
     try {
-      setSwipeLoading(true);
-      const property = properties[currentPropertyIndex];
-
-      const response = await apiCall(`/swipe/${property.id}`, {
-        method: "POST",
+      await apiCall(`/swipe/${filteredProperties[currentPropertyIndex].id}`, {
+        method: 'POST',
         body: JSON.stringify({ is_like: isLike }),
       });
-
-      if (response.match) {
-        alert(
-          "🎉 It's a match! You and the property owner both liked each other!"
-        );
-      }
-
-      // Move to next property
-      const nextIndex = currentPropertyIndex + 1;
-      if (nextIndex < properties.length) {
-        setCurrentPropertyIndex(nextIndex);
-      } else {
-        // Reached the end, fetch more properties or restart
-        await fetchProperties();
-      }
+      // Move to next property after a swipe
+      setCurrentPropertyIndex((prev) => prev + 1);
       setCurrentImageIndex(0);
     } catch (err) {
-      console.error("Failed to swipe:", err);
-      setError("Failed to process swipe. Please try again.");
+      setError("Failed to record swipe. Please try again.");
     } finally {
       setSwipeLoading(false);
     }
@@ -351,10 +279,9 @@ export default function PropertyDashboard() {
 
   // Logout function
   const handleLogout = () => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("user_city");
-    window.location.href = "/signin";
+    logout();
+    // The AuthProvider should handle redirecting, but if not:
+    // navigate('/signin');
   };
 
   // Image navigation
@@ -374,61 +301,68 @@ export default function PropertyDashboard() {
     setCurrentImageIndex(index);
   };
 
-  // Navigate between properties (only via explicit button click, not via arrow keys)
-  const nextProperty = () => {
-    if (properties.length === 0) return;
-    const nextIndex = (currentPropertyIndex + 1) % properties.length;
-    setCurrentPropertyIndex(nextIndex);
-    setCurrentImageIndex(0);
-  };
-
-  const prevProperty = () => {
-    if (properties.length === 0) return;
-    const prevIndex =
-      (currentPropertyIndex - 1 + properties.length) % properties.length;
-    setCurrentPropertyIndex(prevIndex);
-    setCurrentImageIndex(0);
-  };
-
   // Fetch matches count
   const fetchMatchesCount = async () => {
     try {
       const response = await apiCall("/matches");
-      console.log("Matches response:", response);
       setMatches(Array.isArray(response) ? response.length : 0);
     } catch (err) {
-      console.error("Failed to fetch matches:", err);
+      setMatches(0);
     }
   };
 
-  // Initialize data on component mount
+  // Fetch all data needed for dashboard
   useEffect(() => {
+    if (location.pathname !== '/dashboard') return;
+
     if (filters.city) {
       fetchProperties();
-      // Don't fetch user immediately - we have it in localStorage
-      fetchUser();
+      fetchUser(); // This might be redundant now
       fetchMatchesCount();
     }
-    // Remove any global keydown listeners that would allow property navigation via arrow keys
-    // (If previously implemented, ensure not present)
-    // Example: document.addEventListener("keydown", ...) for ArrowLeft/ArrowRight -- not present
-  }, [filters.city]);
+  }, [filters.city, location.pathname]);
 
   // Use filteredProperties for rendering
   const currentProperty =
     filteredProperties[currentPropertyIndex] ||
     filteredProperties[0] ||
     properties[0];
-  const currentImages = currentProperty?.images || [];
+
+  // Handle images with proper fallback logic
+  const getCurrentImages = () => {
+    if (!currentProperty) return defaultImages;
+
+    // Check if property has images array
+    if (
+      currentProperty.images &&
+      Array.isArray(currentProperty.images) &&
+      currentProperty.images.length > 0
+    ) {
+      return getImageUrls(currentProperty.images);
+    }
+
+    // Check for single image fields
+    if (currentProperty.image_url) {
+      return [currentProperty.image_url];
+    }
+
+    if (currentProperty.image) {
+      return [currentProperty.image];
+    }
+
+    // Fallback to default images
+    return defaultImages;
+  };
+
+  const currentImages = getCurrentImages();
 
   return (
-    <Layout 
+    <Layout
       user={user}
       onRefresh={fetchProperties}
       onLogout={handleLogout}
       onCityChange={() => setShowCityModal(true)}
-      onFilterToggle={toggleFilterModal}
-    >
+      onFilterToggle={toggleFilterModal}>
       <div className="p-8">
         {error && (
           <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -488,7 +422,8 @@ export default function PropertyDashboard() {
                 <p className="text-lg font-semibold">No Properties Found</p>
               </div>
               <p className="text-gray-600 mb-6">
-                There are no properties available in {filters.city} at the moment.
+                There are no properties available in {filters.city} at the
+                moment.
               </p>
               <div className="space-y-3">
                 <button
@@ -576,93 +511,98 @@ export default function PropertyDashboard() {
               </div>
 
               {/* Property Details */}
-              <div className="space-y-4">
-                {/* Title and Price */}
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                      {currentProperty.title}
-                    </h2>
-                    <div className="space-y-1">
-                      <p className="text-gray-600 flex items-center">
-                        <User className="w-4 h-4 mr-2" />
-                        <strong>Seller:</strong>{" "}
-                        <span className="ml-1">
-                          {currentProperty.seller_name}
-                        </span>
-                      </p>
-                      <p className="text-gray-600 flex items-center">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        <strong>Location:</strong>{" "}
-                        <span className="ml-1">
-                          {currentProperty.city}
-                          {currentProperty.state &&
-                            `, ${currentProperty.state}`}
-                        </span>
-                      </p>
+              <Link to={`/property/${currentProperty.id}`} className="block">
+                <div className="space-y-4">
+                  {/* Title and Price */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {currentProperty.title}
+                      </h2>
+                      <div className="space-y-1">
+                        <p className="text-gray-600 flex items-center">
+                          <User className="w-4 h-4 mr-2" />
+                          <strong>Seller:</strong>{" "}
+                          <span className="ml-1">
+                            {currentProperty.seller_name ||
+                              currentProperty.user?.name ||
+                              "Unknown Seller"}
+                          </span>
+                        </p>
+                        <p className="text-gray-600 flex items-center">
+                          <MapPin className="w-4 h-4 mr-2" />
+                          <strong>Location:</strong>{" "}
+                          <span className="ml-1">
+                            {currentProperty.city}
+                            {currentProperty.state &&
+                              `, ${currentProperty.state}`}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-orange-600">
+                        ${parseFloat(currentProperty.price).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {currentProperty.type === "rent"
+                          ? "per month"
+                          : "sale price"}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-orange-600">
-                      ${parseFloat(currentProperty.price).toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {currentProperty.type === "rent"
-                        ? "per month"
-                        : "sale price"}
-                    </div>
-                  </div>
-                </div>
-                {/* Tags Display */}
-                {Array.isArray(currentProperty.tags) && currentProperty.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {currentProperty.tags.map((tag, index) => (
-                      <span
-                        key={index}
-                        className="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {/* Description */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gray-800 mb-2">
-                    Description
-                  </h3>
-                  <p className="text-gray-700 leading-relaxed">
-                    {currentProperty.description}
-                  </p>
-                </div>
-                {/* Action Buttons */}
-                <div className="flex justify-center space-x-12 pt-6">
-                  <button
-                    onClick={() => handleSwipe(false)}
-                    disabled={swipeLoading}
-                    className="w-16 h-16 bg-white border-4 border-red-400 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                    title="Pass on this property">
-                    {swipeLoading ? (
-                      <Loader2 className="w-6 h-6 text-red-400 animate-spin" />
-                    ) : (
-                      <X className="w-6 h-6 text-red-400" strokeWidth={3} />
+                  {/* Tags Display */}
+                  {Array.isArray(currentProperty.tags) &&
+                    currentProperty.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {currentProperty.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                  </button>
-                  <button
-                    onClick={() => handleSwipe(true)}
-                    disabled={swipeLoading}
-                    className="w-16 h-16 bg-white border-4 border-green-400 rounded-full flex items-center justify-center hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                    title="Like this property">
-                    {swipeLoading ? (
-                      <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
-                    ) : (
-                      <Heart
-                        className="w-6 h-6 text-green-400"
-                        strokeWidth={3}
-                      />
-                    )}
-                  </button>
+                  {/* Description */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Description
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      {currentProperty.description}
+                    </p>
+                  </div>
+                  {/* Action Buttons */}
+                  <div className="flex justify-center space-x-12 pt-6">
+                    <button
+                      onClick={(e) => handleSwipe(false, e)}
+                      disabled={swipeLoading}
+                      className="w-16 h-16 bg-white border-4 border-red-400 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      title="Pass on this property">
+                      {swipeLoading ? (
+                        <Loader2 className="w-6 h-6 text-red-400 animate-spin" />
+                      ) : (
+                        <X className="w-6 h-6 text-red-400" strokeWidth={3} />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => handleSwipe(true, e)}
+                      disabled={swipeLoading}
+                      className="w-16 h-16 bg-white border-4 border-green-400 rounded-full flex items-center justify-center hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      title="Like this property">
+                      {swipeLoading ? (
+                        <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
+                      ) : (
+                        <Heart
+                          className="w-6 h-6 text-green-400"
+                          strokeWidth={3}
+                        />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </Link>
             </>
           )}
         </div>

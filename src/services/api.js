@@ -10,11 +10,7 @@ export const apiCall = async (endpoint, options = {}) => {
   const url = `/api${endpoint}`;
   const token = localStorage.getItem("auth_token");
 
-  console.log("Making API call to:", url);
-  console.log("Token exists:", !!token);
-
   if (!token) {
-    console.error("No auth token found");
     window.location.href = "/signin";
     return;
   }
@@ -31,19 +27,13 @@ export const apiCall = async (endpoint, options = {}) => {
   try {
     const response = await fetch(url, config);
 
-    console.log("Response status:", response.status);
-
     if (response.status === 401) {
       const body = await response.text();
-      console.warn("401 response body for /matches:", body);
-
-      // Do not redirect — just return null
       if (endpoint === "/matches") return null;
     }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error("API Error:", errorData);
       throw new Error(
         errorData.message || `HTTP error! status: ${response.status}`
       );
@@ -51,9 +41,31 @@ export const apiCall = async (endpoint, options = {}) => {
 
     return await response.json();
   } catch (err) {
-    console.error("API call failed:", err);
     throw err;
   }
+};
+
+// Utility function to get proper image URL
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) {
+    return "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop&crop=entropy&auto=format&q=80";
+  }
+  
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+  
+  // Use the proper Yandex Cloud Storage URL
+  return `https://storage.yandexcloud.net/houser/${imagePath}`;
+};
+
+// Utility function to get proper image URLs for multiple images
+export const getImageUrls = (images) => {
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    return ["https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop&crop=entropy&auto=format&q=80"];
+  }
+  
+  return images.map(img => getImageUrl(img));
 };
 
 export default api;

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -7,9 +9,11 @@ export default function SignIn() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSignUpClick = () => {
-    window.location.href = "/signup";
+    navigate("/signup");
   };
 
   const handleSignIn = async (e) => {
@@ -18,34 +22,10 @@ export default function SignIn() {
     setError("");
 
     try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed");
-      }
-
-      // Store the token and user data
-      localStorage.setItem("auth_token", data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      // Redirect to dashboard or home page
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 100);
+      await login({ email, password });
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.message || "An error occurred during login");
+      setError(err.response?.data?.message || err.message || "An error occurred during login");
     } finally {
       setIsLoading(false);
     }

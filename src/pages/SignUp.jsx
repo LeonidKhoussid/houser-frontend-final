@@ -120,7 +120,6 @@ export default function HouserSignup() {
         }
       }
     } catch (error) {
-      console.error("Registration error:", error);
       setError("Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
@@ -148,7 +147,7 @@ export default function HouserSignup() {
         }),
       });
     } catch (error) {
-      console.error("Failed to save property:", error);
+      // Property save failed silently
     }
   };
 

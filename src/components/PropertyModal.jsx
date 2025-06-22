@@ -125,13 +125,13 @@ const PropertyModal = ({
       }
 
       // Add tags
-      propertyForm.tags.forEach((tag, index) => {
-        formData.append(`tags[${index}]`, tag);
+      propertyForm.tags.forEach((tag) => {
+        formData.append("tags", tag);
       });
 
       // Add images
       images.forEach((image, index) => {
-        formData.append(`images[${index}]`, image);
+        formData.append('image', image);
       });
 
       // Call the save function

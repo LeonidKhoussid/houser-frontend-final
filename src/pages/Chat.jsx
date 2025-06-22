@@ -35,49 +35,16 @@ export default function Chat() {
   const authToken = localStorage.getItem("auth_token");
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // TEMPORARY DEBUG TEST - Add this right after the currentUser declaration
-  useEffect(() => {
-    if (!currentUser.id) return;
-
-    console.log("🔧 Setting up debug user channel for user:", currentUser.id);
-
-    // Simple direct subscription to test
-    const testChannel = echo.private(`user.${currentUser.id}`);
-
-    testChannel.listen("MessageSent", (data) => {
-      console.log("🎯 DIRECT MessageSent received on user channel:", data);
-      alert("Message received on user channel! Check console for details.");
-    });
-
-    testChannel.listen(".MessageSent", (data) => {
-      console.log("🎯 DIRECT .MessageSent received on user channel:", data);
-      alert(
-        "Message received on user channel (with dot)! Check console for details."
-      );
-    });
-
-    // Test if channel subscription works
-    console.log("🔧 User channel subscribed:", testChannel);
-
-    return () => {
-      echo.leave(`user.${currentUser.id}`);
-      console.log("🔧 Left user channel");
-    };
-  }, [currentUser.id]);
-
-  // Scroll to bottom of messages
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
   };
 
-  // Only scroll when messages are first loaded for a conversation
   useEffect(() => {
     if (messages.length > 0) {
       scrollToBottom();
     }
-  }, [selectedMatch?.conversation_id]); // Only trigger when conversation changes
+  }, [selectedMatch?.conversation_id]);
 
-  // API helper
   const apiCall = async (endpoint, options = {}) => {
     const defaultHeaders = {
       "Content-Type": "application/json",
@@ -105,23 +72,19 @@ export default function Chat() {
     return await response.json();
   };
 
-  // Fetch matches with sorting by most recent message
   const fetchMatches = async () => {
     try {
       setLoading(true);
       const data = await apiCall("/matches");
 
-      // Sort matches by most recent message (last_message_at)
       const sortedMatches = data.sort((a, b) => {
         const aTime = new Date(a.last_message_at || a.created_at || 0);
         const bTime = new Date(b.last_message_at || b.created_at || 0);
-        return bTime - aTime; // Most recent first
+        return bTime - aTime;
       });
 
-      // Initialize unread counts from the backend data
       const initialUnreadCounts = {};
       sortedMatches.forEach((match) => {
-        // Assuming your backend returns unread_count for each match
         initialUnreadCounts[match.conversation_id] = match.unread_count || 0;
       });
       setUnreadCounts(initialUnreadCounts);
@@ -134,7 +97,6 @@ export default function Chat() {
     }
   };
 
-  // Fetch messages for a conversation
   const fetchMessages = async (conversationId) => {
     try {
       const data = await apiCall(`/conversations/${conversationId}/messages`);
@@ -144,7 +106,6 @@ export default function Chat() {
     }
   };
 
-  // Send message
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedMatch || sending) return;
 
@@ -160,7 +121,6 @@ export default function Chat() {
         }),
       });
 
-      // Add the message immediately to local state
       setMessages((prev) => {
         const messageExists = prev.some((m) => m.id === actualMessage.id);
         if (messageExists) return prev;
@@ -182,61 +142,27 @@ export default function Chat() {
     const handleGlobalMessage = (data) => {
       const { message } = data;
 
-      // Debug log to see if messages are received
-      console.log(
-        "🔔 Received message on user channel:",
-        message.id,
-        "from user:",
-        message.sender_id
-      );
-
-      // Only process messages from other users
       if (message.sender_id === currentUser.id) return;
 
-      // Prevent duplicate processing of the same message
       if (processedMessages.has(message.id)) {
-        console.log("⚠️ Message already processed:", message.id);
         return;
       }
 
       const messageConversationId = message.conversation_id;
       const currentlySelectedConversationId = selectedMatch?.conversation_id;
 
-      console.log("📊 Checking unread count:", {
-        messageConversationId,
-        currentlySelectedConversationId,
-        shouldIncrement:
-          messageConversationId !== currentlySelectedConversationId,
-      });
-
-      // If the message is NOT from the currently selected conversation, increment unread count
       if (messageConversationId !== currentlySelectedConversationId) {
         setUnreadCounts((prev) => {
           const currentCount = prev[messageConversationId] || 0;
-          const newCount = currentCount + 1;
-          console.log(
-            "✅ Incrementing unread count for conversation",
-            messageConversationId,
-            "from",
-            currentCount,
-            "to",
-            newCount
-          );
           return {
             ...prev,
-            [messageConversationId]: newCount,
+            [messageConversationId]: currentCount + 1,
           };
         });
 
-        // Mark this message as processed
         setProcessedMessages((prev) => new Set([...prev, message.id]));
-      } else {
-        console.log(
-          "ℹ️ Not incrementing - message is from currently selected conversation"
-        );
       }
 
-      // Update the conversation's last_message_at in the matches list
       setMatches((prevMatches) => {
         const updatedMatches = prevMatches.map((match) => {
           if (match.conversation_id === messageConversationId) {
@@ -248,7 +174,6 @@ export default function Chat() {
           return match;
         });
 
-        // Re-sort by most recent message
         return updatedMatches.sort((a, b) => {
           const aTime = new Date(a.last_message_at || a.created_at || 0);
           const bTime = new Date(b.last_message_at || b.created_at || 0);
@@ -257,7 +182,6 @@ export default function Chat() {
       });
     };
 
-    // Use a single global listener to avoid duplicates
     const userChannel = subscribeToUserChannel(
       currentUser.id,
       handleGlobalMessage
@@ -448,14 +372,6 @@ export default function Chat() {
 
   // Select a match and load messages
   const selectMatch = (match) => {
-    // Prevent clicking on test conversations
-    if (match.conversation_id >= 99999) {
-      alert(
-        "This is a test conversation! Click on real conversations instead."
-      );
-      return;
-    }
-
     setSelectedMatch(match);
     fetchMessages(match.conversation_id);
   };
@@ -464,13 +380,11 @@ export default function Chat() {
   const fetchUnreadCounts = async () => {
     try {
       const data = await apiCall("/unread-counts");
-      // Ensure data is an object, not an array
       if (typeof data === "object" && data !== null) {
         setUnreadCounts(data);
       }
     } catch (error) {
       console.error("Failed to fetch unread counts:", error);
-      // Don't break the app if unread counts fail
       setUnreadCounts({});
     }
   };
@@ -479,7 +393,6 @@ export default function Chat() {
   useEffect(() => {
     if (authToken) {
       fetchMatches();
-      // Start with empty unread counts - they'll be updated in real-time
       setUnreadCounts({});
     }
   }, []);

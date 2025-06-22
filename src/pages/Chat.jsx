@@ -9,6 +9,7 @@ import {
   X,
   Loader2,
   MessageCircle,
+  ExternalLink,
 } from "lucide-react";
 import {
   echo,
@@ -17,6 +18,7 @@ import {
   subscribeToUserChannel,
   unsubscribeFromUserChannel,
 } from "../echo";
+import Layout from "../components/Layout";
 
 export default function Chat() {
   const [matches, setMatches] = useState([]);
@@ -65,12 +67,15 @@ export default function Chat() {
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
   };
 
+  // Only scroll when messages are first loaded for a conversation
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [selectedMatch?.conversation_id]); // Only trigger when conversation changes
 
   // API helper
   const apiCall = async (endpoint, options = {}) => {
@@ -493,60 +498,80 @@ export default function Chat() {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex overflow-hidden">
-      {/* Sidebar with matches */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col h-full">
-        <div className="p-6 border-b border-gray-200 flex-shrink-0 bg-gradient-to-r from-orange-50 to-orange-100">
-          <h2 className="text-2xl font-bold text-gray-800">Your Matches</h2>
-          <p className="text-sm text-gray-600 mt-2">
-            {matches.length} active{" "}
-            {matches.length === 1 ? "conversation" : "conversations"}
-          </p>
+    <Layout 
+      user={currentUser}
+      onRefresh={() => window.location.reload()}
+      onLogout={() => {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("user");
+        window.location.href = "/signin";
+      }}
+      onCityChange={() => window.location.href = "/dashboard"}
+      onFilterToggle={() => window.location.href = "/dashboard"}
+    >
+      <div className="h-screen flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0">
+          <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-          {matches.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 h-full flex flex-col justify-center">
-              <Home className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="font-semibold text-gray-700 mb-2">
-                No matches yet
-              </h3>
-              <p className="text-sm">Like properties to start chatting!</p>
+        {/* Main Chat Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-12 h-12 text-orange-400 animate-spin mx-auto mb-4" />
+                <p className="text-gray-600 font-medium">Loading conversations...</p>
+              </div>
+            </div>
+          ) : matches.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-gray-600 mb-2">No conversations yet</h2>
+                <p className="text-gray-500">
+                  Start swiping on properties to match with sellers and begin conversations!
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="space-y-1 p-2">
-              {matches.map((match) => {
-                const otherUser = match.other_user;
-                const property = match.property;
-                const isSelected =
-                  selectedMatch?.conversation_id === match.conversation_id;
-                const unreadCount = unreadCounts[match.conversation_id] || 0;
-                const isTestConversation = match.conversation_id >= 99999;
+            <>
+              {/* Conversations List */}
+              <div className="w-80 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+                <div className="p-4 border-b border-gray-200 flex-shrink-0">
+                  <h2 className="text-lg font-semibold text-gray-800">Conversations</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {matches.map((match) => {
+                    const otherUser = match.other_user;
+                    const property = match.property;
+                    const isSelected =
+                      selectedMatch?.conversation_id === match.conversation_id;
+                    const unreadCount = unreadCounts[match.conversation_id] || 0;
+                    const isTestConversation = match.conversation_id >= 99999;
 
-                return (
-                  <div
-                    key={match.conversation_id}
-                    onClick={() => selectMatch(match)}
-                    className={`p-4 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${
-                      isSelected
-                        ? "bg-gradient-to-r from-orange-100 to-orange-50 border-l-4 border-orange-400 shadow-sm"
-                        : isTestConversation
-                        ? "bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200 opacity-75"
-                        : "hover:bg-gray-50 border border-transparent"
-                    }`}>
-                    <div className="flex items-start gap-3">
+                    return (
                       <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
-                          isTestConversation
-                            ? "bg-gradient-to-br from-blue-400 to-blue-500"
-                            : "bg-gradient-to-br from-orange-400 to-orange-500"
+                        key={match.conversation_id}
+                        onClick={() => selectMatch(match)}
+                        className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                          isSelected
+                            ? "bg-gradient-to-r from-orange-100 to-orange-50 border-l-4 border-orange-400"
+                            : isTestConversation
+                            ? "bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200 opacity-75"
+                            : ""
                         }`}>
-                        <User className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-gray-800 truncate text-base">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                              isTestConversation
+                                ? "bg-gradient-to-br from-blue-400 to-blue-500"
+                                : "bg-gradient-to-br from-orange-400 to-orange-500"
+                            }`}>
+                            <User className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-gray-800 truncate">
                               {otherUser.name}
                               {isTestConversation && (
                                 <span className="text-xs text-blue-600 ml-2">
@@ -554,160 +579,120 @@ export default function Chat() {
                                 </span>
                               )}
                             </h3>
-                            <p className="text-sm text-gray-600 truncate font-medium">
+                            <p className="text-sm text-gray-600 truncate">
                               {property.title}
                             </p>
+                            {unreadCount > 0 && (
+                              <div className="w-5 h-5 bg-orange-400 rounded-full flex items-center justify-center">
+                                <span className="text-xs text-white font-medium">
+                                  {unreadCount}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {unreadCount > 0 && (
-                            <span className="bg-gradient-to-r from-orange-400 to-orange-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-sm">
-                              {unreadCount}
-                            </span>
-                          )}
                         </div>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {property.city}
-                          </span>
-                          <span className="flex items-center gap-1 font-medium">
-                            <DollarSign className="w-3 h-3" />${property.price}
-                            /mo
-                          </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Messages Area */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {selectedMatch ? (
+                  <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                    {/* Chat Header */}
+                    <div className="p-4 border-b border-gray-200 flex-shrink-0">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          onClick={() => window.location.href = `/user/${selectedMatch.other_user.id}`}
+                          className="w-10 h-10 bg-orange-400 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity">
+                          <User className="w-5 h-5 text-white" />
                         </div>
-                        {isTestConversation && (
-                          <p className="text-xs text-blue-600 mt-1 italic">
-                            Test conversation - don't click!
+                        <div>
+                          <h3 
+                            onClick={() => window.location.href = `/user/${selectedMatch.other_user.id}`}
+                            className="font-medium text-gray-800 cursor-pointer hover:text-orange-600 transition-colors">
+                            {selectedMatch.other_user.name}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {selectedMatch.property.title}
                           </p>
-                        )}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`flex ${message.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                              message.sender_id === currentUser.id
+                                ? 'bg-orange-400 text-white'
+                                : 'bg-gray-200 text-gray-800'
+                            }`}
+                          >
+                            <p className="text-sm">{message.content}</p>
+                            <p className={`text-xs mt-1 ${
+                              message.sender_id === currentUser.id ? 'text-orange-100' : 'text-gray-500'
+                            }`}>
+                              {new Date(message.created_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Scroll to bottom element */}
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Message Input */}
+                    <div className="p-4 border-t border-gray-200 flex-shrink-0">
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        sendMessage();
+                      }} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type your message..."
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-orange-400"
+                          disabled={sending}
+                        />
+                        <button
+                          type="submit"
+                          disabled={!newMessage.trim() || sending}
+                          className="bg-orange-400 text-white px-4 py-2 rounded-lg hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {sending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                        </button>
+                      </form>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center bg-white">
+                    <div className="text-center text-gray-500">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-4" />
+                      <p>Select a conversation to start messaging</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
-
-      {/* Chat area */}
-      <div className="flex-1 flex flex-col h-full bg-white">
-        {selectedMatch ? (
-          <>
-            {/* Chat header */}
-            <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setSelectedMatch(null)}
-                    className="lg:hidden p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center shadow-sm">
-                    <User className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800 text-lg">
-                      {selectedMatch.other_user.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {selectedMatch.property.title} • $
-                      {selectedMatch.property.price}/mo
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => (window.location.href = "/dashboard")}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                  <X className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-            </div>
-
-            {/* Messages - Scrollable area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-gray-50 to-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-12">
-                  <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">
-                    No messages yet
-                  </h3>
-                  <p className="text-sm">
-                    Start the conversation by saying hello!
-                  </p>
-                </div>
-              ) : (
-                messages.map((message) => {
-                  const isOwn = message.sender_id === currentUser.id;
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${
-                        isOwn ? "justify-end" : "justify-start"
-                      } mb-3`}>
-                      <div
-                        className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-sm ${
-                          isOwn
-                            ? "bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-br-md"
-                            : "bg-white text-gray-800 border border-gray-200 rounded-bl-md"
-                        }`}>
-                        <p className="text-sm leading-relaxed">
-                          {message.content}
-                        </p>
-                        <p
-                          className={`text-xs mt-2 ${
-                            isOwn ? "text-orange-100" : "text-gray-500"
-                          }`}>
-                          {new Date(message.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message input */}
-            <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0 shadow-lg">
-              <div className="flex gap-3 max-w-4xl mx-auto">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type a message..."
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || sending}
-                  className="p-3 bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-full hover:from-orange-500 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:scale-105 disabled:transform-none">
-                  {sending ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500 bg-gradient-to-b from-gray-50 to-white">
-            <div className="text-center">
-              <MessageCircle className="w-20 h-20 mx-auto mb-6 text-gray-300" />
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                Select a match to start chatting
-              </h3>
-              <p className="text-gray-500">
-                Choose a conversation from the sidebar to begin messaging
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    </Layout>
   );
 }

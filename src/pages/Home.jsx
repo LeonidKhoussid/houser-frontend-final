@@ -12,19 +12,20 @@ export default function HouserLandingPage() {
     <div className="min-h-screen bg-white">
       <header className="flex justify-between items-center px-4 py-4 border-b">
         <div className="flex space-x-8">
-          <button className="text-gray-700 font-medium">BUY</button>
-          <button className="text-gray-700 font-medium">RENT</button>
-          <button className="text-gray-700 font-medium">SELL</button>
+          <img
+            src="https://storage.yandexcloud.net/houser/Group%2066%20(2).png"
+            className="w-18 text-gray-700"
+          />
         </div>
 
         <div className="flex items-center space-x-2">
-          <Home className="w-6 h-6 text-gray-700" />
-          <span className="text-xl font-bold text-gray-800">HOUSER</span>
+          <span className="text-2xl font-bold text-gray-800">HOUSER</span>
         </div>
 
         <button
           onClick={handleSignInClick}
-          className="bg-teal-600 text-white px-6 py-2 rounded font-medium">
+          className="bg-teal-600 text-white px-6 py-2 rounded font-medium"
+        >
           SIGN IN
         </button>
       </header>
@@ -61,7 +62,8 @@ export default function HouserLandingPage() {
           ].map((src, index) => (
             <div
               key={index}
-              className="flex-shrink-0 w-36 h-36 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transform transition-transform hover:scale-105 bg-white">
+              className="flex-shrink-0 w-36 h-36 rounded-xl overflow-hidden border border-gray-200 shadow-md hover:shadow-lg transform transition-transform hover:scale-105 bg-white"
+            >
               <img
                 src={src}
                 alt={`House ${index + 1}`}
